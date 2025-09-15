@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
 
 export async function POST(req: NextRequest) {
   const form = await req.formData();
@@ -9,24 +8,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid datetime' }, { status: 400 });
   }
 
-  const checkout = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          product_data: { name: 'Private Tutoring Session' },
-          unit_amount: 6000,
-        },
-        quantity: 1,
-      },
-    ],
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?booking=confirmed`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/book`,
-  });
-
-  return NextResponse.redirect(checkout.url ?? '/book', { status: 303 });
+  // For now, redirect to success page without payment processing
+  // You can implement your own payment logic here later
+  return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/success?booking=confirmed`, { status: 303 });
 }
 
 

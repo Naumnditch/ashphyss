@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
 
 const PRODUCTS = {
   r1: { name: 'Kinematics Problem Set', priceCents: 999 },
@@ -13,24 +12,9 @@ export async function POST(req: NextRequest) {
   const prod = (PRODUCTS as any)[id];
   if (!prod) return NextResponse.json({ error: 'Unknown resource' }, { status: 400 });
 
-  const checkout = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          product_data: { name: prod.name },
-          unit_amount: prod.priceCents,
-        },
-        quantity: 1,
-      },
-    ],
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?resource=${id}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/resources`,
-  });
-
-  return NextResponse.redirect(checkout.url ?? '/resources', { status: 303 });
+  // For now, redirect to success page without payment processing
+  // You can implement your own payment logic here later
+  return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/success?resource=${id}`, { status: 303 });
 }
 
 

@@ -15,7 +15,7 @@ interface BookingEmailData {
 // Create transporter with Gmail SMTP
 // You'll need to set up environment variables for email credentials
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER, // Your Gmail address
@@ -89,7 +89,7 @@ export const createSMTPTransporter = (config: {
   user: string;
   pass: string;
 }) => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure,

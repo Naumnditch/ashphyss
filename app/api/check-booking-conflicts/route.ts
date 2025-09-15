@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkBookingConflicts, getOccupiedTimeSlotsForDate } from '@/lib/booking-conflicts';
 
 // Mock existing bookings - In production, this would come from your database
-const mockExistingBookings = [
+const mockExistingBookings: Array<{
+  startDate: Date;
+  timeSlot: string;
+  studentName: string;
+}> = [
   // Example: Alex booked Aug 31, 2024 at 6 PM
   // {
   //   startDate: new Date('2024-08-31T18:00:00'),

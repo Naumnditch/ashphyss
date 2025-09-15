@@ -65,7 +65,6 @@ model Booking {
   timeSlot     String         // e.g., "18:00" for 6 PM
   createdAt    DateTime       @default(now())
   paid         Boolean        @default(false)
-  stripeId     String?        @unique
   sessions     BookingSession[]
   
   @@unique([startDate, timeSlot]) // Prevent overlapping bookings
@@ -98,7 +97,6 @@ model Purchase {
   userId     String
   resource   Resource @relation(fields: [resourceId], references: [id])
   resourceId String
-  stripeId   String   @unique
   createdAt  DateTime @default(now())
 }
 
