@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #000000;
+  --background: #ffffff;
+}
+
+html, body, #__next {
+  height: 100%;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.container-max {
+  @apply max-w-6xl mx-auto px-4;
+}
+
+.card {
+  @apply bg-white rounded-2xl border border-gray-200 shadow-sm;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply bg-black text-white hover:bg-gray-800;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-black hover:bg-gray-200;
+}
+
+

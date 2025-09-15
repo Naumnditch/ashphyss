@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String?  @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[]
+  purchases     Purchase[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Booking {
+  id           String         @id @default(cuid())
+  user         User           @relation(fields: [userId], references: [id])
+  userId       String
+  studentName  String
+  studentEmail String
+  studentPhone String
+  notes        String?
+  startDate    DateTime       // First session date
+  timeSlot     String         // e.g., "18:00" for 6 PM
+  createdAt    DateTime       @default(now())
+  paid         Boolean        @default(false)
+  stripeId     String?        @unique
+  sessions     BookingSession[]
+  
+  @@unique([startDate, timeSlot]) // Prevent overlapping bookings
+}
+
+model BookingSession {
+  id        String   @id @default(cuid())
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId String
+  date      DateTime
+  sessionNumber Int   // 1-12 for monthly course
+  completed Boolean  @default(false)
+  
+  @@unique([date, bookingId]) // Ensure unique sessions per booking
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  title       String
+  priceCents  Int
+  fileUrl     String
+  description String?
+  createdAt   DateTime @default(now())
+  purchases   Purchase[]
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  resource   Resource @relation(fields: [resourceId], references: [id])
+  resourceId String
+  stripeId   String   @unique
+  createdAt  DateTime @default(now())
+}
+
+
