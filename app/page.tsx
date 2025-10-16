@@ -12,6 +12,14 @@ export default function HomePage() {
       </section>
       
       <PhysicsPathsSelector />
+      
+      {/* Construction Notice */}
+      <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 text-center">
+        <p className="text-red-600 font-bold text-lg">
+          The site is under construction, please contact me through email or whatsapp through the following, 
+          Email: contact@ashphys.com / Whatsapp: +90 541 100 70 27
+        </p>
+      </div>
     </div>
   );
 }
