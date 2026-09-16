@@ -10,6 +10,7 @@ import { generateToken, generatePreAuthToken } from '@/lib/auth/jwt';
 import { checkLoginRateLimit, recordFailedLoginAttempt } from '@/lib/auth/rateLimit';
 import { resolveLoginSession } from '@/lib/auth/sessions';
 import { DEVICE_ID_COOKIE, DEVICE_ID_MAX_AGE, deviceLabelFromUserAgent, clientIpFromHeaders } from '@/lib/auth/device';
+import { logEvent } from '@/lib/analytics/track';
 import { LoginRequest, ApiResponse } from '@/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<any>>> {
@@ -98,6 +99,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<a
       sectionId: user.section_id,
       sessionId: sessionResult.sessionId,
     });
+
+    await logEvent({ userId: user.id, eventType: 'login' });
 
     const response = NextResponse.json({
       success: true,

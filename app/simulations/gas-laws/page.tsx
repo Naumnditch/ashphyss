@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { query } from '@/lib/db/client';
 import { GasLawsSimulator } from '@/components/simulations/GasLawsSimulator';
 
+import { SimulationStartTracker } from '@/components/analytics/SimulationStartTracker';
+
 export const dynamic = 'force-dynamic';
 
 async function getSimContext() {
@@ -31,6 +33,7 @@ export default async function GasLawsSimulationPage() {
           'linear-gradient(#d8e3ec 1px, transparent 1px) 0 0/24px 24px, linear-gradient(90deg, #d8e3ec 1px, transparent 1px) 0 0/24px 24px, #faf7f0',
       }}
     >
+      <SimulationStartTracker />
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-8">
         {ctx?.chapter_id && (
           <Link

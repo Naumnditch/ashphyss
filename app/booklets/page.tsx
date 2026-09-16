@@ -1,4 +1,5 @@
 import { query } from '@/lib/db/client';
+import { DownloadLink } from '@/components/analytics/DownloadLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,11 +67,11 @@ export default async function BookletsPage() {
               </h2>
               <div className="bg-white border border-[#e4ddcc] rounded-xl overflow-hidden divide-y divide-[#eee6d3]">
                 {grouped.get(key)!.map((b) => (
-                  <a
+                  <DownloadLink
                     key={b.id}
                     href={b.file_url!}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    entityType="booklet"
+                    entityId={b.id}
                     className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#faf7f0] transition-colors"
                   >
                     <div className="min-w-0">
@@ -82,7 +83,7 @@ export default async function BookletsPage() {
                     <span className="flex-shrink-0 text-[12px] font-bold px-3 py-1.5 rounded-full bg-[#1b2a41] text-white whitespace-nowrap">
                       ↓ Download
                     </span>
-                  </a>
+                  </DownloadLink>
                 ))}
               </div>
             </div>

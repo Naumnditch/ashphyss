@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { trackEvent } from '@/lib/analytics/client';
 
 export interface PaperCardData {
   id: string;
@@ -113,6 +114,7 @@ export function PastPaperCard({ paper, signedIn }: { paper: PaperCardData; signe
             href={paper.question_paper_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackEvent({ eventType: 'download', entityType: 'past_paper', entityId: paper.id, metadata: { file: 'question_paper' } })}
             className="flex items-center justify-center gap-2 text-[13.5px] font-semibold px-3 py-2.5 rounded-lg bg-[#eef2fb] text-[#2f52c9] hover:bg-[#e3eaf9]"
           >
             <DownloadIcon /> Question Paper
@@ -128,6 +130,7 @@ export function PastPaperCard({ paper, signedIn }: { paper: PaperCardData; signe
             href={paper.mark_scheme_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackEvent({ eventType: 'download', entityType: 'past_paper', entityId: paper.id, metadata: { file: 'mark_scheme' } })}
             className="flex items-center justify-center gap-2 text-[13.5px] font-semibold px-3 py-2.5 rounded-lg bg-[#f2f1ef] text-[#1b2a41] hover:bg-[#e9e7e3]"
           >
             <DownloadIcon /> Mark Scheme

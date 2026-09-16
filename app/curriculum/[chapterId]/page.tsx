@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { query } from '@/lib/db/client';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
+import { ChapterViewTracker } from '@/components/analytics/ChapterViewTracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,6 +112,7 @@ export default async function ChapterDetailPage({ params }: { params: { chapterI
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
+      <ChapterViewTracker topicIds={topics.map((t) => t.id)} />
       <Link href="/curriculum" className="text-sm text-blue-600 hover:underline mb-6 inline-block">
         ← Back to full curriculum
       </Link>

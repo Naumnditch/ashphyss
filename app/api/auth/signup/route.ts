@@ -11,6 +11,7 @@ import { hashPassword } from '@/lib/auth/password';
 import { generateToken } from '@/lib/auth/jwt';
 import { resolveLoginSession } from '@/lib/auth/sessions';
 import { DEVICE_ID_COOKIE, DEVICE_ID_MAX_AGE, deviceLabelFromUserAgent, clientIpFromHeaders } from '@/lib/auth/device';
+import { logEvent } from '@/lib/analytics/track';
 import { ApiResponse } from '@/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<any>>> {
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<a
       sectionId: user.section_id,
       sessionId: sessionResult.sessionId,
     });
+
+    await logEvent({ userId: user.id, eventType: 'signup', metadata: { accountType: isTeacher ? 'teacher' : 'student' } });
 
     const response = NextResponse.json(
       {

@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Pricing restructured to a commitment model: 1/3/12-month plans shown as per-month price with savings badge; also the session/device-limit auth system below — both awaiting the same JWT_SECRET confirmation before push, see that entry)
+Last updated: 2026-09-16 (First-party analytics: analytics_events table, site-wide event tracking, /admin/analytics dashboard — plus the pricing restructure and session/device-limit auth system below, all three awaiting the same JWT_SECRET confirmation before push, see that entry)
 
 ---
 
@@ -1937,3 +1937,140 @@ instead of the old flat "monthly or yearly" two-button layout.
   Production environment (see that entry). Since a git push moves the
   whole branch, this pricing work is blocked on the same confirmation,
   even though it doesn't touch JWT_SECRET itself.
+
+### Added: first-party analytics (analytics_events + /admin/analytics)
+
+An event log instrumented across the key actions on the site, plus a
+dashboard to actually read it. Reuses the `sessions` table from the
+device-limit feature for DAU/WAU/MAU and login stats rather than
+duplicating that data, per the explicit instruction this was built to.
+
+- DATABASE (`add_analytics_events` + a follow-up index migration):
+  `analytics_events` — id, user_id (nullable, FK users ON DELETE SET
+  NULL — anonymous visitors keep event_type/entity_type/entity_id/
+  path/metadata/created_at, deliberately NO FK on entity_id (it's a
+  loose reference into whichever table entity_type names — topics,
+  simulations, booklets, past_papers — so deleting content never has
+  to cascade through a fast-growing events table). Three indexes from
+  the spec ((event_type, created_at), (entity_type, entity_id),
+  (user_id, created_at)) plus one added after building the recent-
+  activity feed and realizing it sorts the WHOLE table by created_at
+  regardless of event_type, which none of those three serve — a
+  plain `(created_at DESC)` index was added in a second migration.
+- `lib/analytics/track.ts` — server-side `logEvent()`, wrapped in try/
+  catch, swallows and console.errors on failure so a logging problem
+  never breaks the request it's attached to. Exports the fixed list of
+  10 tracked event types from the spec (page_view, lesson_view,
+  simulation_start, simulation_complete, practice_start, download,
+  login, logout, signup, subscribe_click) — `simulation_complete` is
+  defined but nothing fires it yet, since none of the 21 simulations
+  currently has an unambiguous "done" moment (the spec explicitly
+  allowed skipping this); the dashboard's completion-rate column
+  degrades gracefully to blank rather than 0% when that's the case.
+- `lib/analytics/client.ts` — client-side `trackEvent()`, zero imports
+  beyond browser globals (deliberately, so importing it from a 'use
+  client' component never pulls the pg driver into the browser
+  bundle — see the currency.ts split in the pricing entry above for
+  the same lesson learned once already this session). Uses
+  `navigator.sendBeacon`, falling back to a keepalive `fetch`.
+  `POST /api/analytics/track` is the public sink both hit; it always
+  derives `user_id` server-side from the auth cookie (never trusts a
+  client-supplied one) and resolves a simulation's DB id from its
+  `path` when the caller doesn't know it (see below).
+- INSTRUMENTED call sites:
+  * Auth: `logEvent()` called directly (same process, no HTTP round
+    trip) from login/signup on success and from logout after revoking
+    the session.
+  * `page_view`: one `<PageViewTracker />` in the root layout, self-
+    excluding `/admin` and `/teacher` paths via `usePathname()` rather
+    than needing every page to opt in.
+  * `simulation_start`: all 21 simulation `page.tsx` files gained a
+    `<SimulationStartTracker />` (mechanically, via a script matching
+    each file's identical outer-div structure — verified 42 matches
+    = 21 files × 2, one import + one usage each). It fires once per
+    mount with NO props — simulation pages are static routes that
+    don't know their own DB id, so the API route resolves
+    `simulations.id` from the page's own path server-side instead of
+    requiring 21 separate query edits.
+  * `lesson_view`: fired from the chapter detail page
+    (`/curriculum/[chapterId]`), entity_type `'topic'` — SCOPE
+    DECISION worth flagging: this app has no separate per-lesson page
+    (the `lessons` DB table is unused dead schema; "lessons" in this
+    codebase's own language means `topics`, matching "25 chapters, 89
+    lessons" elsewhere in this file), so one event fires per topic
+    listed when its chapter page loads, not per genuine per-topic
+    engagement. Coarser than ideal, but simple, non-blocking, and
+    still a real "which chapters get looked at" signal.
+  * `download`: `PastPaperCard.tsx` (already a client component)
+    gained inline `onClick` handlers on its QP/MS links; a new
+    `DownloadLink` component wraps the plain `<a>` on `/booklets`
+    (a Server Component with no other client interactivity before
+    this).
+  * `subscribe_click`: the Subscribe button in `PricingCards.tsx`,
+    metadata `{plan, period}`.
+  * `practice_start`: `PracticeSession.tsx` on mount, keyed to
+    `topicId` — not required for the dashboard's Practice section
+    (that reads `problem_submissions` directly, which already had the
+    data with no new tracking needed, per the spec), added anyway
+    since it's a cheap, honest instrumentation of a listed event type.
+- `/admin/analytics` DASHBOARD (added to `AdminNav`), date range
+  picker (7/30/90 days via `?days=`, default 30, admin-page style
+  matching the rest of `/admin/*` rather than the public marketing
+  navy/brass/cream skin — a brass/navy accent is used only inside the
+  chart itself as a brand touch):
+  1. Overview cards — DAU/WAU/MAU from `sessions.last_seen_at`
+     (reusing that table, not duplicating it into events), logins
+     today, signups/downloads/sim-starts for the selected range.
+  2. Activity over time — new `AnalyticsChart.tsx` (Recharts
+     AreaChart, active users + logins per day), the first real use of
+     the `recharts` dependency in this codebase (was already installed
+     but unused).
+  3. Most-viewed lessons — top 20 by `lesson_view` count joined to
+     topics/chapters, with a trend arrow comparing against the
+     equal-length PRIOR period.
+  4. Most-used simulations — top by `simulation_start`, completion %
+     shown only where `simulation_complete` data actually exists.
+  5. Practice engine — attempts/% correct/avg attempts-before-correct
+     per topic, straight from `problem_submissions` — no new tracking,
+     as specified.
+  6. Downloads — top booklets and top past papers by count.
+  7. Recent activity feed — latest events paginated 50/page up to 200
+     total, resolving a readable entity name across four different
+     possible source tables via conditional LEFT JOINs.
+  8. "Accounts near the device limit" — 2+ active sessions or 3+ new
+     sessions started in the selected range, tying back into the
+     device-limit feature per the spec's explicit ask, with a link
+     into `/admin/users` to act on it.
+- HOUSEKEEPING FOLLOW-UP, NOT WIRED THIS PASS: a scheduled prune of
+  `analytics_events` rows older than 12 months. No Vercel cron was
+  added — noting it here as the spec allowed. Manual version until
+  then: `DELETE FROM analytics_events WHERE created_at < now() -
+  interval '12 months';` run periodically (or wire a Vercel Cron
+  Job hitting a small admin-authenticated route that runs that same
+  statement, on whatever schedule — monthly is plenty for a 12-month
+  retention window).
+- VERIFICATION: `npx tsc --noEmit` and `npm run build` both clean
+  (build run locally with a throwaway `JWT_SECRET`, as with the auth
+  entry above); scanned every one of the 37 new/changed files for `\u`
+  escapes — none. Every one of the 8 dashboard queries was run
+  verbatim against the real database with real committed fixture rows
+  (a throwaway test user, a throwaway booklet, real topic/simulation/
+  past-paper ids already in the DB) rather than guessed at: confirmed
+  DAU/WAU/MAU/logins/signups/downloads/sim-starts counts matched
+  exactly, the activity-over-time bucketing landed events on the
+  correct calendar day, the lesson trend arrow correctly picked up a
+  deliberately-planted prior-period row, download counts matched per
+  entity type, the recent-feed query resolved the right readable name
+  across all four entity-type joins, and the device-insight query
+  correctly flagged the 2-session test account. All fixture rows
+  (events, sessions, the test booklet, the test user) were then
+  explicitly deleted and confirmed at zero leftover — not relied on a
+  transaction rollback this time, since multiple separate query calls
+  were needed to inspect each result individually.
+  NOT verified by actually loading `/admin/analytics` in a browser or
+  clicking through a real student session end-to-end (view a lesson,
+  start a sim, attempt practice, download a booklet, log out) — this
+  sandbox has no browser access to the live site, the standing
+  limitation noted throughout this file. Worth doing once deployed.
+- NOT PUSHED YET: same branch, same JWT_SECRET confirmation blocking
+  the push as the two entries above.

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { tryToUsd } from '@/lib/currency';
+import { trackEvent } from '@/lib/analytics/client';
 
 export interface PricingPlan {
   id: string;
@@ -151,6 +152,7 @@ function PricingCard({ plan, period, usdRate, signedIn }: { plan: PricingPlan; p
             href={shopierUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackEvent({ eventType: 'subscribe_click', metadata: { plan: plan.slug, period } })}
             className="block text-center text-[13px] font-semibold px-4 py-2.5 rounded-lg bg-[#1b2a41] text-white hover:bg-[#243a5e]"
           >
             Subscribe

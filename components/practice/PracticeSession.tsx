@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
+import { trackEvent } from '@/lib/analytics/client';
 
 interface Option {
   id: string;
@@ -99,6 +100,11 @@ export function PracticeSession({ topicId }: { topicId: string }) {
   useEffect(() => {
     loadQuestions();
   }, [loadQuestions]);
+
+  useEffect(() => {
+    trackEvent({ eventType: 'practice_start', entityType: 'topic', entityId: topicId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId]);
 
   const current = queue[index];
 
