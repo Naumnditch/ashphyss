@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Equation Rearranger: Advanced tab with powers/roots + 12 seeded practice questions)
+Last updated: 2026-09-16 (Equation Rearranger: fixed a crash on powered factors + a sign bug, switched to manual Back/Next stepping)
 
 ---
 
@@ -1378,3 +1378,85 @@ Two distinct visual systems, intentionally:
   (topic had no prior rows).
 - `npm run build` (the real gate, not just tsc) passed clean; scanned
   the changed file for `\u` escapes per the standing gotcha — none.
+
+## Equation Rearranger: crash fix + sign bug + manual Back/Next stepping (2026-09-16)
+- USER-REPORTED BUG: Advanced tab froze on "Isolating r…" for F=GMm/r²
+  solving for r (same for g=GM/r² and F=kq₁q₂/r² solving for q₂) — never
+  progressed past the caption.
+- ROOT CAUSE: `isolateSteps()` set `move.symbol` to the DISPLAY label
+  (`factorLabel`, e.g. "r²"), but `buildIntermediate()` re-found the moved
+  factor with `factorTag(f) === move.symbol` — `factorTag` returns the
+  BARE symbol ("r"). "r" never equals "r²", `findIndex` returned -1,
+  `cloneFactor(undefined)` threw inside the animation's setTimeout chain,
+  which silently died with no visible error. Same class of bug existed in
+  the 'multiply' branch (lift moves route through it too) and, latently,
+  in additive — all three re-found "what moved" by comparing strings
+  instead of holding onto the actual thing that moved.
+- FIX (not a string-compare patch): `Move` now carries the real
+  structural pointer captured at the moment `isolateSteps` made each
+  move — `movedFactor` (+`movedDenomIndex` where the position isn't
+  provably always 0) for lift/multiplicative, `movedGroup`
+  (+`movedGroupIndex`) for additive. `buildIntermediate` reads these
+  directly; no more re-finding by any string.
+- CLOSING THE VERIFICATION GAP THAT LET IT SHIP: the previous session's
+  195-check Node script only exercised the pure algebra
+  (isolateSteps + evalSide) — it never called `buildIntermediate` or
+  `layoutEquation`, so it couldn't have caught a bug that only throws
+  inside the *rendering* pipeline. New script extracts the algebra
+  engine's actual source lines (not a hand-transcribed copy — a literal
+  `sed` slice of the real file, run via `node --experimental-strip-types`)
+  and, for every equation × every clickable variable × both starting
+  orientations (equation as given, and mirrored) × every chained
+  ordered pair of variables (solve X, then from that result solve Y —
+  chaining is exactly how a user would actually hit this), runs every
+  move through `buildIntermediate` + `layoutEquation`, asserts no throw,
+  asserts every cancelKey resolves to a real token in the mid-layout,
+  and checks the final/chained answer against the original equation
+  (relative error < 1e-9). 3090 checks, 0 failures after the fix.
+- THAT SAME THOROUGH PASS CAUGHT A SECOND, INDEPENDENT REAL BUG before
+  it ever shipped: chaining v=u+at (solve u, then a) left the isolated
+  side as "−a", not "a" — an additive move had flipped that term's sign
+  earlier in the chain, and the "isolated" check only looked at whether
+  the home side was down to one factor, never at that group's sign.
+  Fixed with a new `negate` move ("×(−1) both sides") appended whenever
+  the final single-term home group's sign is −1 — checked generically
+  after the root-move logic, not special-cased to vuat. A THIRD bug
+  surfaced by the same pass: `keysForFactorAt`-class mismatch — a
+  power-wrapped factor (e.g. the surviving "(T/2π)²" from an earlier
+  square-both-sides move, later needing to be cleared like any other
+  multiplicative factor in a chained solve) renders as an `-open`/
+  `-close` bracket PAIR, never as a single bare token, so the same
+  bare-varKey cancelKey computation that broke on "r²" also broke on
+  it. New `keysForFactorAt()` helper returns the right key shape
+  (one key for var/const, the open+close pair for power factors) and
+  is now used everywhere a cancelKey gets built.
+- MANUAL STEPPING (separate request, same session): replaced the
+  auto-playing setTimeout chain (inject → strike → fade → settle → next
+  move, 4+ timers deep) with fully precomputed step snapshots. Clicking
+  a variable now calls `isolateSteps` once, builds a flat
+  `StepSnapshot[]` via `buildSteps()` (3 steps per move — operate/
+  cancel/settle — plus one flip step if the answer needs mirroring to
+  the left), and does nothing else automatically; the caption reads
+  "Solve for r — 3 steps. Press Next." Back/Next just move an index
+  into that array — no timers, no replay on Back (an effect only plays
+  the token fade-in on a FORWARD arrival at an 'inject' step, tracked
+  via a direction ref, so Back is instant). Next is disabled during that
+  brief fade-in window and at the last step; Back is disabled at the
+  start. ← / → keys mirror the buttons. A small step-list chip row
+  ("1. × r²  2. ÷ F  3. √ both sides") shows the whole plan with the
+  current step highlighted. The "Verify with numbers" panel and
+  variable-clicking-to-chain are now gated on `isDone` (stepIndex at
+  the last step) instead of the old `phase==='done'`. Injected-token
+  diffing (which keys are "new" this step, for the fade-in) is computed
+  ONCE per step inside `buildSteps` at solve-time, not per-render.
+- Manually traced (Node, real `buildSteps`/`layoutEquation` code, since
+  this sandbox's egress policy blocks browser access to the live site —
+  same limitation as the previous session): F=GMm/r²→r (9 steps),
+  F=kq₁q₂/r²→q₂ (10 steps, ends with a flip), T=2π√(L/g)→g (12 steps:
+  ÷2π, square both sides, ×g, ÷(T/2π)² — the multi-move chain-through-
+  a-radical case), KE=½mv²→v (10 steps, flip). All four stepped fully
+  forward and back with no errors, every cancelKey resolved, and the
+  numeric answer matched the original equation to relative error ~0 in
+  every case.
+- `npx tsc --noEmit` and `npm run build` both clean; scanned the changed
+  file for `\u` escapes — none.

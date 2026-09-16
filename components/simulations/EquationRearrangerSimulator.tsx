@@ -1,16 +1,20 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
- * Equation Rearranger — the operation forms directly inside the equation.
+ * Equation Rearranger — the operation forms directly inside the equation,
+ * one manually-advanced step at a time.
  *
- * Not a floating annotation: clicking a variable makes the tool build a
- * real, unsimplified intermediate form first (e.g. F = m×a dividing by m
- * becomes F/m = (m×a)/m, fractions and all, fading in on both sides at
- * once), then cancels the matching pair on the side that already had the
- * term, then settles into the simplified result. A second click chains
- * from what's on screen; Reset returns to the original equation.
+ * Not a floating annotation: clicking a variable prepares the full move
+ * list but plays nothing automatically. Each move is three Next presses —
+ * apply the operation (a real, unsimplified fraction/term fades in on both
+ * sides at once, e.g. F = m×a dividing by m becomes F/m = (m×a)/m),
+ * highlight the cancelling pair, then settle into the simplified result —
+ * plus one final flip step if the answer needs mirroring onto the left.
+ * Back steps to the previous snapshot instantly, no replayed animation.
+ * A second click (once the current derivation is fully done) chains from
+ * what's on screen; Reset returns to the original equation.
  *
  * Two tabs: Basic (the original six linear equations) and Advanced
  * (fourteen more, several with squared terms or a square root — gravity,
@@ -22,16 +26,27 @@ import { useRef, useState } from 'react';
  * T = 2π√(L/g)). Isolating a squared factor ends with a "take the square
  * root of both sides" move; isolating something trapped inside an
  * existing root starts with a "square both sides" move to peel it off —
- * both reuse the same inject → cancel → settle animation as every other
+ * both reuse the same inject → cancel → settle step shape as every other
  * move, just wrapping a whole side instead of matching a single symbol.
- * Physical constants (G, k, ε₀, c, π, ½) are real factors that travel
- * with the algebra but are never clickable targets.
+ * A single-term side can also carry a leftover negative sign after
+ * chaining through an earlier additive move (v=u+at: solve u, then a) —
+ * one more "×(−1) both sides" move flips it, since isolated must mean the
+ * bare positive variable, not "−a". Physical constants (G, k, ε₀, c, π, ½)
+ * are real factors that travel with the algebra but are never clickable
+ * targets.
  *
- * Every equation × every non-constant variable was verified in Node
- * before any of this UI existed: three random positive-value trials each,
- * rearranged formula checked against the original to a relative error
- * under 1e-9, AND every intermediate step along the way re-checked to
- * still balance under the same values (195 isolations total, 0 failures).
+ * Every equation × every clickable variable × both starting orientations
+ * (the equation as given, and mirrored) × every chained pair (solve X,
+ * then from that result solve Y) was run through the ACTUAL isolateSteps/
+ * buildIntermediate/layoutEquation code in Node before any of this UI
+ * existed — not a hand-transcribed copy, the real functions, extracted and
+ * executed directly — asserting no throw, every cancel key resolving to a
+ * real token in the intermediate layout, and the final (or chained) answer
+ * checked against the original equation to a relative error under 1e-9
+ * (3090 checks, 0 failures). That full-pipeline pass is what caught two
+ * real bugs a plain algebra-only check had missed: a move.symbol/factorTag
+ * mismatch that crashed on any ×/÷ move touching a powered or
+ * power-wrapped factor, and the leftover-negative-sign case above.
  */
 
 const INK = '#1b2a41';
@@ -71,15 +86,24 @@ interface EqState {
   left: Side;
   right: Side;
 }
-type OpType = 'divide' | 'multiply' | 'addsub' | 'root' | 'square';
+type OpType = 'divide' | 'multiply' | 'addsub' | 'root' | 'square' | 'negate';
 interface Move {
-  kind: 'lift' | 'additive' | 'multiplicative' | 'root' | 'square';
+  kind: 'lift' | 'additive' | 'multiplicative' | 'root' | 'square' | 'negate';
   op: OpType;
-  symbol: string; // e.g. "m", "a×t", or the isolated target for root/square
+  symbol: string; // display label, e.g. "m", "r²", "a×t", or the isolated target for root/square
   opLabel: string; // e.g. "÷ m", "× V", "− u", "√", "²"
   homeIsLeft: boolean;
   stateAfter: EqState;
   degree?: number; // for root moves: the power being undone (2 = square root)
+  // Structural pointers captured at the moment isolateSteps made this move,
+  // so buildIntermediate can locate the moved factor/group directly instead
+  // of re-finding it by comparing against `symbol` (which includes display
+  // formatting like an exponent — "r²" — and can never match a bare-symbol
+  // lookup such as factorTag(f) === 'r²').
+  movedFactor?: Factor; // lift, multiplicative divide/multiply
+  movedDenomIndex?: number; // multiplicative 'multiply' (incl. lift): its index within home.denom before removal
+  movedGroup?: ProductGroup; // additive
+  movedGroupIndex?: number; // additive: its index within home.groups before removal
 }
 
 function cloneFactor(f: Factor): Factor {
@@ -135,7 +159,11 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
       const [factor] = homeS.denom.splice(denomIdx, 1);
       oppS.groups[0].factors.push(factor);
       const label = factorLabel(factor);
-      moves.push({ kind: 'lift', op: 'multiply', symbol: label, opLabel: `× ${label}`, homeIsLeft: home === 'L', stateAfter: cloneState(left, right) });
+      moves.push({
+        kind: 'lift', op: 'multiply', symbol: label, opLabel: `× ${label}`,
+        homeIsLeft: home === 'L', stateAfter: cloneState(left, right),
+        movedFactor: cloneFactor(factor), movedDenomIndex: denomIdx,
+      });
       home = home === 'L' ? 'R' : 'L';
       continue;
     }
@@ -145,6 +173,7 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
       const moveGroup = homeS.groups.find((g) => !g.factors.some((f) => containsTarget(f, target)));
       if (moveGroup) {
         const oppS = os();
+        const groupIdx = homeS.groups.indexOf(moveGroup);
         homeS.groups = homeS.groups.filter((g) => g !== moveGroup);
         oppS.groups.push({ sign: (moveGroup.sign * -1) as 1 | -1, factors: moveGroup.factors });
         const label = moveGroup.factors.map(factorLabel).join('×');
@@ -155,6 +184,8 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
           opLabel: `${moveGroup.sign > 0 ? '−' : '+'} ${label}`,
           homeIsLeft: home === 'L',
           stateAfter: cloneState(left, right),
+          movedGroup: { sign: moveGroup.sign, factors: moveGroup.factors.map(cloneFactor) },
+          movedGroupIndex: groupIdx,
         });
         continue;
       }
@@ -169,7 +200,11 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
         homeS.groups[0].factors = homeS.groups[0].factors.filter((f) => f !== moveFactor);
         oppS.denom.push(moveFactor);
         const label = factorLabel(moveFactor);
-        moves.push({ kind: 'multiplicative', op: 'divide', symbol: label, opLabel: `÷ ${label}`, homeIsLeft: home === 'L', stateAfter: cloneState(left, right) });
+        moves.push({
+          kind: 'multiplicative', op: 'divide', symbol: label, opLabel: `÷ ${label}`,
+          homeIsLeft: home === 'L', stateAfter: cloneState(left, right),
+          movedFactor: cloneFactor(moveFactor),
+        });
         continue;
       }
     }
@@ -181,7 +216,11 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
       homeS.denom = homeS.denom.slice(1);
       oppS.groups[0].factors.push(factor);
       const label = factorLabel(factor);
-      moves.push({ kind: 'multiplicative', op: 'multiply', symbol: label, opLabel: `× ${label}`, homeIsLeft: home === 'L', stateAfter: cloneState(left, right) });
+      moves.push({
+        kind: 'multiplicative', op: 'multiply', symbol: label, opLabel: `× ${label}`,
+        homeIsLeft: home === 'L', stateAfter: cloneState(left, right),
+        movedFactor: cloneFactor(factor), movedDenomIndex: 0,
+      });
       continue;
     }
 
@@ -197,6 +236,19 @@ function isolateSteps(state: EqState, target: string): { moves: Move[]; finalIsL
         oppS.groups = [{ sign: 1, factors: [wrapped] }];
         oppS.denom = [];
         moves.push({ kind: 'root', op: 'root', degree: p, symbol: target, opLabel: p === 2 ? '√' : `^(1/${p})`, homeIsLeft: home === 'L', stateAfter: cloneState(left, right) });
+      }
+      // A single-term home side can still carry a negative sign (e.g. from
+      // an earlier additive move in a chained solve: v=u+at, solve u, then
+      // solve a — the leftover term is "−a", not "a"). One more move flips
+      // it, since "isolated" must mean the bare positive variable.
+      if (hs().groups[0].sign === -1) {
+        const homeS = hs();
+        const oppS = os();
+        homeS.groups[0].sign = 1;
+        oppS.groups.forEach((g) => {
+          g.sign = (g.sign * -1) as 1 | -1;
+        });
+        moves.push({ kind: 'negate', op: 'negate', symbol: target, opLabel: '× (−1)', homeIsLeft: home === 'L', stateAfter: cloneState(left, right) });
       }
       break;
     } else if (carrier.kind === 'power') {
@@ -228,7 +280,15 @@ function buildIntermediate(move: Move, before: EqState): { mid: EqState; cancelK
   const homeBefore = cloneSide(move.homeIsLeft ? before.left : before.right);
   const oppBefore = cloneSide(move.homeIsLeft ? before.right : before.left);
   const homeSideTag = move.homeIsLeft ? 'L' : 'R';
-  const oppSideTag = move.homeIsLeft ? 'R' : 'L';
+
+  if (move.kind === 'negate') {
+    // No literal pair cancels here — both sides just get multiplied by −1
+    // to flip a leftover negative sign off the isolated term. Show the
+    // "before" state unchanged for operate/cancel; settle jumps straight
+    // to move.stateAfter, which already carries the flipped signs.
+    const mid: EqState = move.homeIsLeft ? { left: homeBefore, right: oppBefore } : { left: oppBefore, right: homeBefore };
+    return { mid, cancelKeys: [] };
+  }
 
   if (move.kind === 'root' || move.kind === 'square') {
     const stateAfterOppSide = move.homeIsLeft ? move.stateAfter.right : move.stateAfter.left;
@@ -245,32 +305,36 @@ function buildIntermediate(move: Move, before: EqState): { mid: EqState; cancelK
   const cancelKeys: string[] = [];
 
   if (move.op === 'divide') {
-    const homeNumGroupIdx = homeBefore.groups.findIndex((g) => g.factors.some((f) => factorTag(f) === move.symbol.split('×')[0]));
-    const gi = homeNumGroupIdx === -1 ? 0 : homeNumGroupIdx;
-    const factor = homeBefore.groups[gi].factors.find((f) => factorTag(f) === move.symbol)!;
-    cancelKeys.push(varKey(move.symbol, 'n', homeSideTag, gi));
+    // The moved factor was the sole OTHER factor cleared from home's single
+    // remaining group — by construction (the additive stage always runs
+    // first) that group is always index 0. The moved factor is usually a
+    // plain var/const, but chaining can leave a power-wrapped factor (e.g.
+    // "(T/2π)²") sitting in a product group too, so key lookup must handle
+    // both shapes.
+    const factor = move.movedFactor!;
+    const tag = factorTag(factor);
+    cancelKeys.push(...keysForFactorAt(tag, 'n', homeSideTag, 0, factor));
     homeBefore.denom.push(cloneFactor(factor));
-    cancelKeys.push(varKey(move.symbol, 'd', homeSideTag, homeBefore.denom.length - 1));
+    cancelKeys.push(...keysForFactorAt(tag, 'd', homeSideTag, homeBefore.denom.length - 1, factor));
     oppBefore.denom.push(cloneFactor(factor));
   } else if (move.op === 'multiply') {
-    const homeDenomIdx = homeBefore.denom.findIndex((f) => factorTag(f) === move.symbol);
-    const factor = homeBefore.denom[homeDenomIdx];
-    cancelKeys.push(varKey(move.symbol, 'd', homeSideTag, homeDenomIdx));
+    const factor = move.movedFactor!;
+    const tag = factorTag(factor);
+    const denomIdx = move.movedDenomIndex ?? 0;
+    cancelKeys.push(...keysForFactorAt(tag, 'd', homeSideTag, denomIdx, factor));
     homeBefore.groups[0].factors.push(cloneFactor(factor));
-    cancelKeys.push(varKey(move.symbol, 'n', homeSideTag, 0));
+    cancelKeys.push(...keysForFactorAt(tag, 'n', homeSideTag, 0, factor));
     oppBefore.groups[0].factors.push(cloneFactor(factor));
   } else {
     // additive
-    const factors = move.symbol.split('×');
-    const origIdx = homeBefore.groups.findIndex((g) => g.factors.map(factorLabel).join('×') === move.symbol);
-    const idx = origIdx === -1 ? 0 : origIdx;
-    const origSign = homeBefore.groups[idx].sign;
-    const origFactors = homeBefore.groups[idx].factors;
-    factors.forEach((_, fi) => cancelKeys.push(varKey(factors[fi], 'n', homeSideTag, idx)));
-    homeBefore.groups.push({ sign: (origSign * -1) as 1 | -1, factors: origFactors.map(cloneFactor) });
+    const group = move.movedGroup!;
+    const idx = move.movedGroupIndex ?? 0;
+    group.factors.forEach((f) => cancelKeys.push(...keysForFactorAt(factorTag(f), 'n', homeSideTag, idx, f)));
+    const injected: ProductGroup = { sign: (group.sign * -1) as 1 | -1, factors: group.factors.map(cloneFactor) };
+    homeBefore.groups.push(injected);
     const injectedIdx = homeBefore.groups.length - 1;
-    factors.forEach((f) => cancelKeys.push(varKey(f, 'n', homeSideTag, injectedIdx)));
-    oppBefore.groups.push({ sign: (origSign * -1) as 1 | -1, factors: origFactors.map(cloneFactor) });
+    group.factors.forEach((f) => cancelKeys.push(...keysForFactorAt(factorTag(f), 'n', homeSideTag, injectedIdx, f)));
+    oppBefore.groups.push({ sign: (group.sign * -1) as 1 | -1, factors: group.factors.map(cloneFactor) });
   }
 
   const mid: EqState = move.homeIsLeft ? { left: homeBefore, right: oppBefore } : { left: oppBefore, right: homeBefore };
@@ -331,6 +395,17 @@ function mirror(state: EqState): EqState {
 // between the unsimplified and simplified renders.
 function varKey(tag: string, role: 'n' | 'd', side: 'L' | 'R', index: number): string {
   return `${tag}:${role}:${side}:${index}`;
+}
+
+// A var/const factor renders as ONE token, so its slot key IS its token key.
+// A power/radical factor renders as a bracket PAIR (open + close, plus its
+// own recursively-laid-out inner tokens) — its slot key is never itself a
+// rendered token, only "<slot>-open"/"<slot>-close" are. Anything that wants
+// to reference "the token(s) currently at this slot" (cancel-key building)
+// needs both keys for a power factor, not the bare slot key.
+function keysForFactorAt(tag: string, role: 'n' | 'd', side: 'L' | 'R', index: number, factor: Factor): string[] {
+  const base = varKey(tag, role, side, index);
+  return factor.kind === 'power' ? [`${base}-open`, `${base}-close`] : [base];
 }
 
 // ---------- equation bank ----------
@@ -749,17 +824,81 @@ function layoutEquation(state: EqState): { tokens: Token[]; totalWidth: number; 
   };
 }
 
-// ---------- animation durations (slow, deliberate — Manim-paced) ----------
-const INJECT_DWELL = 1400;
-const STRIKE_MS = 550;
-const FADE_MS = 750;
-const SETTLE_MS = 1150;
-const GAP_MS = 550;
-const FLIP_MS = 1500;
-
-type SubStage = 'inject' | 'strike' | 'fade' | 'settle' | null;
-type Phase = 'idle' | 'animating' | 'flipping' | 'done';
 type Tab = 'basic' | 'advanced';
+type StepKind = 'operate' | 'cancel' | 'settle' | 'flip';
+
+interface StepSnapshot {
+  displayState: EqState;
+  subStage: 'inject' | 'strike' | null;
+  cancelKeys: string[];
+  injectedKeys: string[];
+  caption: string;
+  moveIndex: number; // which move (0-based) this belongs to; moves.length for the flip step
+  stepKind: StepKind;
+}
+
+/**
+ * Turns a move list into a flat sequence of manually-advanced snapshots:
+ * every move becomes three steps (apply the operation unsimplified →
+ * highlight the cancelling pair → settle into the simplified result), and
+ * an unbalanced derivation gets one final flip step. Each snapshot is a
+ * complete, independent render state — Back/Next just move an index into
+ * this array, no timers or replay involved.
+ */
+function buildSteps(moves: Move[], finalIsLeft: boolean, startState: EqState): StepSnapshot[] {
+  const steps: StepSnapshot[] = [];
+  let before = startState;
+
+  moves.forEach((move, mi) => {
+    const { mid, cancelKeys } = buildIntermediate(move, before);
+    const beforeKeys = new Set(layoutEquation(before).tokens.map((t) => t.key));
+    const midKeys = layoutEquation(mid).tokens.map((t) => t.key);
+    const injectedKeys = midKeys.filter((k) => !beforeKeys.has(k));
+
+    const isPower = move.kind === 'root' || move.kind === 'square';
+    const isNegate = move.kind === 'negate';
+    const operateCaption = isNegate
+      ? 'Multiply both sides by −1'
+      : isPower
+      ? move.kind === 'root'
+        ? `Take the ${move.degree === 2 ? 'square' : `${move.degree}th`} root of both sides`
+        : 'Square both sides'
+      : `Apply ${move.opLabel} to both sides`;
+    const cancelCaption = isNegate
+      ? 'The sign flips on both sides'
+      : isPower
+      ? move.kind === 'root'
+        ? `${move.symbol}${supNum(move.degree ?? 2)} simplifies to ${move.symbol}`
+        : 'The root cancels here'
+      : `${move.symbol} cancels here`;
+
+    steps.push({ displayState: mid, subStage: 'inject', cancelKeys, injectedKeys, caption: operateCaption, moveIndex: mi, stepKind: 'operate' });
+    steps.push({ displayState: mid, subStage: 'strike', cancelKeys, injectedKeys: [], caption: cancelCaption, moveIndex: mi, stepKind: 'cancel' });
+    steps.push({ displayState: move.stateAfter, subStage: null, cancelKeys: [], injectedKeys: [], caption: 'Simplified.', moveIndex: mi, stepKind: 'settle' });
+    before = move.stateAfter;
+  });
+
+  if (!finalIsLeft) {
+    steps.push({
+      displayState: mirror(before),
+      subStage: null,
+      cancelKeys: [],
+      injectedKeys: [],
+      caption: 'Flipped so the answer sits on the left.',
+      moveIndex: moves.length,
+      stepKind: 'flip',
+    });
+  }
+
+  return steps;
+}
+
+function moveStepLabel(move: Move): string {
+  if (move.kind === 'root') return move.degree === 2 ? '√ both sides' : `^(1/${move.degree}) both sides`;
+  if (move.kind === 'square') return '² both sides';
+  if (move.kind === 'negate') return '×(−1) both sides';
+  return move.opLabel;
+}
 
 export function EquationRearrangerSimulator() {
   const [tab, setTab] = useState<Tab>('basic');
@@ -767,127 +906,105 @@ export function EquationRearrangerSimulator() {
   const [eqIdx, setEqIdx] = useState(0);
   const [target, setTarget] = useState<string | null>(null);
   const [baseState, setBaseState] = useState<EqState>(EQUATIONS[0].initial);
-  const [displayState, setDisplayState] = useState<EqState>(EQUATIONS[0].initial);
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [subStage, setSubStage] = useState<SubStage>(null);
-  const [injectStarted, setInjectStarted] = useState(false);
-  const [caption, setCaption] = useState('Click any variable to isolate it');
+  const [moves, setMoves] = useState<Move[]>([]);
+  const [finalIsLeft, setFinalIsLeft] = useState(true);
+  const [steps, setSteps] = useState<StepSnapshot[]>([]);
+  const [stepIndex, setStepIndex] = useState(-1); // -1 = prepared, not yet started
+  const [injectStarted, setInjectStarted] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
   const [sampleVals, setSampleVals] = useState<Record<string, number>>(EQUATIONS[0].sample);
 
-  const movesRef = useRef<Move[]>([]);
-  const finalIsLeftRef = useRef(true);
-  const beforeForMoveRef = useRef<EqState>(EQUATIONS[0].initial);
-  const cancelKeysRef = useRef<string[]>([]);
-  const injectedKeysRef = useRef<Set<string>>(new Set());
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
+  const directionRef = useRef<'forward' | 'back'>('forward');
   const eq = EQUATIONS[eqIdx];
+  const isDone = target !== null && stepIndex === steps.length - 1;
 
-  const clearTimers = () => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-  };
-  const after = (fn: () => void, delay: number) => {
-    const id = setTimeout(fn, delay);
-    timersRef.current.push(id);
-  };
-
-  const finishAndMaybeFlip = (lastState: EqState) => {
-    if (!finalIsLeftRef.current) {
-      setCaption('Rearranging so the answer sits on the left…');
-      setPhase('flipping');
-      after(() => {
-        const mirrored = mirror(lastState);
-        setDisplayState(mirrored);
-        after(() => {
-          setPhase('done');
-          setBaseState(mirrored);
-        }, FLIP_MS);
-      }, 60);
-    } else {
-      setPhase('done');
-      setBaseState(lastState);
+  // Fade newly-injected tokens in on forward advance into an 'inject' step;
+  // jump straight to fully-visible on Back (no replayed animation).
+  useEffect(() => {
+    if (stepIndex < 0 || stepIndex >= steps.length) {
+      setInjectStarted(true);
+      return;
     }
+    const step = steps[stepIndex];
+    if (step.subStage === 'inject' && directionRef.current === 'forward') {
+      setInjectStarted(false);
+      setTransitioning(true);
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          setInjectStarted(true);
+          setTransitioning(false);
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+    setInjectStarted(true);
+    setTransitioning(false);
+  }, [stepIndex, steps]);
+
+  // Commit the settled/flipped equation as the new base once a derivation
+  // reaches its last step, so chaining ("click another variable now")
+  // continues from what's actually on screen.
+  useEffect(() => {
+    if (target !== null && stepIndex === steps.length - 1) {
+      const finalDisplay = steps.length > 0 ? steps[stepIndex].displayState : baseState;
+      setBaseState(finalDisplay);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, stepIndex, steps]);
+
+  const goNext = () => {
+    if (transitioning || stepIndex >= steps.length - 1) return;
+    directionRef.current = 'forward';
+    setStepIndex((i) => i + 1);
+  };
+  const goBack = () => {
+    if (transitioning || stepIndex <= -1) return;
+    directionRef.current = 'back';
+    setStepIndex((i) => i - 1);
   };
 
-  const playMove = (idx: number) => {
-    const move = movesRef.current[idx];
-    const before = beforeForMoveRef.current;
-    const { mid, cancelKeys } = buildIntermediate(move, before);
-    cancelKeysRef.current = cancelKeys;
-
-    const beforeKeys = new Set(layoutEquation(before).tokens.map((t) => t.key));
-    const midKeys = layoutEquation(mid).tokens.map((t) => t.key);
-    injectedKeysRef.current = new Set(midKeys.filter((k) => !beforeKeys.has(k)));
-
-    setDisplayState(mid);
-    setSubStage('inject');
-    setInjectStarted(false);
-    const isPower = move.kind === 'root' || move.kind === 'square';
-    setCaption(isPower ? (move.kind === 'root' ? `Take the ${move.degree === 2 ? 'square' : `${move.degree}th`} root of both sides` : 'Square both sides') : `Apply ${move.opLabel} to both sides`);
-    requestAnimationFrame(() => requestAnimationFrame(() => setInjectStarted(true)));
-
-    after(() => {
-      setSubStage('strike');
-      setCaption(isPower ? (move.kind === 'root' ? `${move.symbol}${supNum(move.degree ?? 2)} simplifies to ${move.symbol}` : 'The root cancels here') : `${move.symbol} cancels here`);
-      after(() => {
-        setSubStage('fade');
-        after(() => {
-          setSubStage('settle');
-          setDisplayState(move.stateAfter);
-          beforeForMoveRef.current = move.stateAfter;
-          setCaption('Settling into place…');
-          after(() => {
-            setSubStage(null);
-            after(() => {
-              if (idx + 1 < movesRef.current.length) playMove(idx + 1);
-              else finishAndMaybeFlip(move.stateAfter);
-            }, GAP_MS);
-          }, SETTLE_MS);
-        }, FADE_MS);
-      }, STRIKE_MS);
-    }, INJECT_DWELL);
-  };
+  useEffect(() => {
+    if (target === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'ArrowLeft') goBack();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, stepIndex, steps, transitioning]);
 
   const solveFor = (symbol: string) => {
-    clearTimers();
-    const { moves, finalIsLeft } = isolateSteps(baseState, symbol);
-    movesRef.current = moves;
-    finalIsLeftRef.current = finalIsLeft;
-    beforeForMoveRef.current = baseState;
+    const { moves: newMoves, finalIsLeft: newFinalIsLeft } = isolateSteps(baseState, symbol);
+    const newSteps = buildSteps(newMoves, newFinalIsLeft, baseState);
+    setMoves(newMoves);
+    setFinalIsLeft(newFinalIsLeft);
+    setSteps(newSteps);
+    setStepIndex(-1);
+    directionRef.current = 'forward';
     setTarget(symbol);
-    setDisplayState(baseState);
-    setSubStage(null);
-    if (moves.length > 0) {
-      setPhase('animating');
-      setCaption(`Isolating ${symbol}…`);
-      after(() => playMove(0), 100);
-    } else {
-      setCaption(`${symbol} is already alone`);
-      finishAndMaybeFlip(baseState);
-    }
   };
 
   const reset = () => {
-    clearTimers();
     setTarget(null);
+    setMoves([]);
+    setSteps([]);
+    setStepIndex(-1);
     setBaseState(eq.initial);
-    setDisplayState(eq.initial);
-    setPhase('idle');
-    setSubStage(null);
-    setCaption('Click any variable to isolate it');
   };
 
   const switchEquation = (i: number) => {
-    clearTimers();
     setEqIdx(i);
     setTarget(null);
+    setMoves([]);
+    setSteps([]);
+    setStepIndex(-1);
     setBaseState(EQUATIONS[i].initial);
-    setDisplayState(EQUATIONS[i].initial);
-    setPhase('idle');
-    setSubStage(null);
     setSampleVals(EQUATIONS[i].sample);
-    setCaption('Click any variable to isolate it');
   };
 
   const switchTab = (t: Tab) => {
@@ -896,16 +1013,25 @@ export function EquationRearrangerSimulator() {
     switchEquation(firstIdx);
   };
 
-  const layout = layoutEquation(displayState);
-  const cancelSet = new Set(cancelKeysRef.current);
-  const injectedSet = injectedKeysRef.current;
-  const isInjectSubStage = subStage === 'inject';
-  const isStrikeSubStage = subStage === 'strike';
-  const isFadeSubStage = subStage === 'fade';
+  const activeStep = target !== null && stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null;
+  const displayState = target === null ? eq.initial : activeStep ? activeStep.displayState : baseState;
+  const caption =
+    target === null
+      ? 'Click any variable to isolate it'
+      : steps.length === 0
+      ? `${target} is already alone`
+      : stepIndex === -1
+      ? `Solve for ${target} — ${steps.length} step${steps.length === 1 ? '' : 's'}. Press Next.`
+      : activeStep!.caption;
 
-  const finalMove = movesRef.current.length > 0 ? movesRef.current[movesRef.current.length - 1] : null;
-  const finalState = finalMove ? finalMove.stateAfter : baseState;
-  const finalDisplaySide = finalIsLeftRef.current ? finalState.right : finalState.left;
+  const layout = layoutEquation(displayState);
+  const cancelSet = new Set(activeStep?.cancelKeys ?? []);
+  const injectedSet = new Set(activeStep?.injectedKeys ?? []);
+  const isInjectSubStage = activeStep?.subStage === 'inject';
+  const isStrikeSubStage = activeStep?.subStage === 'strike';
+
+  const finalState = moves.length > 0 ? moves[moves.length - 1].stateAfter : baseState;
+  const finalDisplaySide = finalIsLeft ? finalState.right : finalState.left;
   const rearrangedVal = target ? evalSide(finalDisplaySide, sampleVals) : 0;
   const checkVals = { ...sampleVals, [target || '']: rearrangedVal };
   const origLeftVal = target ? evalSide(eq.initial.left, checkVals) : 0;
@@ -970,10 +1096,9 @@ export function EquationRearrangerSimulator() {
               const isInjectedNow = isInjectSubStage && injectedSet.has(tok.key);
               let opacity = 1;
               if (isInjectedNow && !injectStarted) opacity = 0;
-              if (isFadeSubStage && isCancelling) opacity = 0;
 
               const isTargetTok = tok.targetSymbol === target;
-              const clickable = tok.kind === 'var' && (phase === 'idle' || phase === 'done');
+              const clickable = tok.kind === 'var' && (target === null || isDone);
 
               return (
                 <button
@@ -1014,12 +1139,57 @@ export function EquationRearrangerSimulator() {
         <div className="px-4 pb-4 text-center">
           <span
             className={`text-[12.5px] font-semibold px-3 py-1.5 rounded-full ${
-              phase === 'done' ? 'bg-[#e6f2ee] text-[#1b5c4d]' : 'bg-[#f6efdc] text-[#8f6428]'
+              isDone ? 'bg-[#e6f2ee] text-[#1b5c4d]' : 'bg-[#f6efdc] text-[#8f6428]'
             }`}
           >
             {caption}
           </span>
         </div>
+
+        {target && steps.length > 0 && (
+          <div className="px-4 pb-3 flex flex-col items-center gap-2.5">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goBack}
+                disabled={stepIndex <= -1 || transitioning}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full border border-[#d8cfb6] text-[#4a5a72] bg-white hover:bg-[#faf7f0] disabled:opacity-35 disabled:cursor-not-allowed"
+              >
+                ◀ Back
+              </button>
+              <span className="text-[11.5px] font-mono text-[#a8a196] min-w-[90px] text-center">
+                {stepIndex === -1 ? 'Ready' : `Step ${stepIndex + 1} of ${steps.length}`}
+              </span>
+              <button
+                onClick={goNext}
+                disabled={isDone || transitioning}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full border border-[#1b2a41] text-white bg-[#1b2a41] hover:bg-[#2a3d5c] disabled:opacity-35 disabled:cursor-not-allowed"
+              >
+                Next ▶
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {moves.map((m, mi) => (
+                <span
+                  key={mi}
+                  className={`text-[10.5px] font-mono px-2 py-1 rounded ${
+                    activeStep?.moveIndex === mi ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
+                  }`}
+                >
+                  {mi + 1}. {moveStepLabel(m)}
+                </span>
+              ))}
+              {!finalIsLeft && (
+                <span
+                  className={`text-[10.5px] font-mono px-2 py-1 rounded ${
+                    activeStep?.stepKind === 'flip' ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
+                  }`}
+                >
+                  {moves.length + 1}. flip sides
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="px-4 pb-5 flex flex-wrap items-center gap-2 border-t border-[#eee6d3] pt-4">
           {target && (
@@ -1027,7 +1197,7 @@ export function EquationRearrangerSimulator() {
               ↺ Reset to original equation
             </button>
           )}
-          {target && (
+          {target && isDone && (
             <span className="text-[11px] text-[#a8a196] italic">
               — clicking another variable now continues from what's on screen
             </span>
@@ -1069,6 +1239,11 @@ export function EquationRearrangerSimulator() {
               operation, and only the side that was already a perfect power simplifies away.
             </p>
             <p>The variable you clicked stays red for the entire derivation. Grey numbers and letters (G, k, π, ½, ε₀, c) are constants — they move with the algebra but can't be the target.</p>
+            <p>
+              <strong className="text-[#1b2a41]">Nothing plays automatically.</strong> Press Next to take each step —
+              apply the operation, watch it cancel, then settle — or ← / → on your keyboard. Back is instant, no
+              replay.
+            </p>
           </div>
         </div>
 
@@ -1123,7 +1298,7 @@ export function EquationRearrangerSimulator() {
                   {eq.name}
                 </div>
               </div>
-              {phase === 'done' && (
+              {isDone && (
                 <div className="bg-[#faf7f0] border border-[#eee6d3] rounded-lg p-3 mb-1">
                   <div className="font-mono text-[10.5px] tracking-wide uppercase text-[#4a5a72] mb-2">
                     Verify — plug the answer back into the original equation
