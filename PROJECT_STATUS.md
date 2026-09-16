@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Equation Rearranger: fixed a crash on powered factors + a sign bug, switched to manual Back/Next stepping)
+Last updated: 2026-09-16 (New sim: Vector Addition Sandbox — 9th Prep Physics topic, 6 modes, 12 practice questions)
 
 ---
 
@@ -1460,3 +1460,102 @@ Two distinct visual systems, intentionally:
   every case.
 - `npx tsc --noEmit` and `npm run build` both clean; scanned the changed
   file for `\u` escapes — none.
+
+## Vector Addition Sandbox — 9th Prep Physics topic (2026-09-16)
+- New topic "Vectors: Addition & Resolution" (id `11e7164b-e47d-4b4d-
+  8bad-1002c892ba20`), chapter 0 Prep Physics, order 9 (after Order of
+  Magnitude & Estimation). Shows on `/curriculum` immediately, same as
+  the other 7 still-unbuilt Prep Physics topics do — the page never
+  required a simulation to exist first.
+- `/simulations/vector-addition` — inspired by PhET Vector Addition and
+  oPhysics's vector tool (studied the IDEAS, wrote entirely original
+  code/art/layout in the existing AshPhys lab-notebook palette, no
+  Three.js, vanilla SVG + pointer events like every other drag-based sim
+  here). `lib/vectors.ts` is the ONE pure-math module every mode shares
+  (add/subtract/scaleVec/negate/sum/magnitude/angleDeg/toPolar/
+  fromPolar/cumulativeChain/angleDiff) — verified by importing the REAL
+  file directly into a Node script (`node --experimental-strip-types`,
+  not a hand-transcribed copy) before any UI existed: 30,011 checks —
+  polar↔cartesian round-trips both directions, tip-to-tail endpoint ==
+  component sum, parallelogram diagonal, commutativity, a−b == a+(−b),
+  scaling distributes over addition, all four quadrants, and every
+  axis-aligned/cardinal case. 0 failures.
+- SIX MODES, one tab bar:
+  1. **1D** — arrows dragged along a number line (displacement/force/
+     velocity context switch relabels the same maths); shows each
+     vector individually from zero AND tip-to-tail into a signed
+     resultant, so opposite-direction cancellation is visible directly.
+  2. **2D Sandbox** (the core) — up to 6 vectors, drag tail to
+     translate, drag tip to change; every vector independently editable
+     as |v|/θ or vx/vy (kept in sync both ways); toggles for sum, angle
+     arcs, on-canvas values, grid, snap-to-integer, and three component
+     display styles (none / dashed right-triangle on each vector /
+     projected onto the axes). Dragging a tail off the canvas edge
+     deletes that vector.
+  3. **Methods** — Tip-to-tail / Parallelogram / Components, ALL
+     manually stepped (Back/Next + "Step X of Y" + ←/→, no auto-play
+     anywhere, same pattern the Equation Rearranger uses) rather than
+     timer-driven. A reverse-order toggle on tip-to-tail visibly proves
+     a+b and b+a land on the same R via different intermediate paths.
+     Components' final step writes out Pythagoras and tan⁻¹ with the
+     actual numbers, not just symbols.
+  4. **Equations** — c = s₁·a + s₂·b with live sliders (−3 to 3, step
+     0.5, negative reverses); a separate manually-stepped 3-step panel
+     shows a−b built explicitly as a+(−b), b visibly flipping before
+     the tip-to-tail add.
+  5. **Scale Drawing** — the actual IGCSE exam skill: two given vectors
+     drawn tip-to-tail to a stated scale (e.g. 1 cm : 2 N), a
+     draggable+rotatable virtual ruler and protractor (drag body to
+     move, small ring handle to rotate), typed magnitude+angle answer
+     checked against the true resultant (computed via the same lib, not
+     hardcoded) at ±2% length / ±2°, revealing the calculated answer
+     after checking either way.
+  6. **Challenges** — four random-generated families (plain resultant,
+     find-the-missing-vector, equilibrium/equilibrant, and real
+     contexts: river crossing, crosswind, two tugboats), a streak/best
+     counter, and a full worked solution shown after every check
+     (right or wrong).
+- SCOPE DECISIONS made explicitly, not silently:
+  - "Drag new vectors out of a toolbox" became "+ Add vector" buttons
+    (up to 6) that place a new vector ready to drag into position —
+    genuine drag-and-drop from a palette is real friction on touch and
+    adds nothing the click-then-drag flow doesn't already teach.
+  - Scale Drawing's tip-to-tail CONSTRUCTION of the two given vectors is
+    drawn for the student (correctly, to scale) rather than requiring
+    freehand drawing — grading hand-drawn line accuracy fairly is a
+    much harder, separate UX problem from the one actually specified
+    (measure with virtual tools, check the typed numeric answer with
+    tolerance). The ruler/protractor are for the student's own visual
+    reading, not auto-measuring devices — the app never reads the tools
+    itself, only the typed answer, which is the honest way to grade a
+    measurement exercise.
+  - Scale Drawing's canvas uses a FIXED pixel size (not the responsive
+    viewBox-scaling every other mode uses) specifically so 1 cm stays
+    exactly 37.8px (the standard 96dpi/100%-zoom web convention) and
+    the ruler's tick spacing is real — a scaled viewBox would silently
+    break that. Documented as an honest technical ceiling: a
+    browser-responsive canvas can never GUARANTEE physical-world
+    accuracy the way print can, at any zoom level or device pixel
+    ratio, same category of limitation as the quiz-lockdown ceiling
+    noted elsewhere in this file.
+- DATABASE: `simulations` row (`sim_type='graph_builder'`, matching
+  every other Prep Physics sim — no closer enum value exists, same
+  workaround already used for gas-laws/equation-rearranger),
+  `difficulty_level=2`, `order=9`. 12 practice questions seeded for the
+  new topic (previously had zero): scalar-vs-vector classification x2
+  (multiple_choice), opposite 1D forces, two perpendicular-force
+  resultant magnitude/direction pairs (one 3-4-5, one 5-12-13, so the
+  answers check exactly), scale-drawing interpretation, equilibrium
+  magnitude, a velocity-change subtraction, a distance-vs-displacement
+  conceptual multiple_choice, and a boat/river crossing — spanning
+  difficulty 1-3. Verified post-insert: all 3 multiple_choice rows have
+  exactly 4 options with exactly 1 correct; all 9 numeric answers are
+  clean values (3, 5, 53.1, 20, 10, 5, 5, 13, 67.4) so the existing 2%
+  numeric tolerance never creates a false negative.
+- `npx tsc --noEmit` and `npm run build` both clean; scanned every new/
+  changed file for `\u` escapes — none. Manual click-through on desktop
+  and a mobile viewport blocked by this sandbox's egress policy (same
+  standing limitation noted in the Equation Rearranger entries above) —
+  typecheck, full build, and the Node-verified math are the available
+  substitute; worth a real click-through from a session with browser
+  access, particularly the ruler/protractor drag-and-rotate on touch.
