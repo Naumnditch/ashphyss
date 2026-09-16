@@ -7,6 +7,16 @@ export const dynamic = 'force-dynamic';
 
 const SESSION_ORDER: Record<string, number> = { 'Feb/Mar': 0, 'May/Jun': 1, 'Oct/Nov': 2 };
 
+/** Cambridge runs several parallel IGCSE syllabuses with the same paper
+ *  structure but different codes and grading — e.g. 0972 is the 9-1 grading
+ *  variant of 0625. Papers from different syllabuses are never the same
+ *  exam, so they're kept in separate tabs rather than mixed under one
+ *  "Paper 4 2023" heading. */
+const SYLLABUS_LABELS: Record<string, { short: string; heading: string }> = {
+  '0625': { short: '0625 · IGCSE Physics', heading: 'Cambridge IGCSE Physics · 0625' },
+  '0972': { short: '0972 · IGCSE (9-1) Physics', heading: 'Cambridge IGCSE (9-1) Physics · 0972' },
+};
+
 async function getPapers(studentId: string | null): Promise<PaperCardData[]> {
   const result = await query(
     `SELECT p.id, p.year, p.session, p.paper_number, p.variant, p.paper_name, p.tier,
@@ -24,10 +34,14 @@ async function getPapers(studentId: string | null): Promise<PaperCardData[]> {
 export default async function PastPapersPage({
   searchParams,
 }: {
-  searchParams: { paper?: string; year?: string; variant?: string };
+  searchParams: { syllabus?: string; paper?: string; year?: string; variant?: string };
 }) {
   const user = await getCurrentUser();
-  const papers = await getPapers(user?.id ?? null);
+  const allPapers = await getPapers(user?.id ?? null);
+
+  const syllabuses = Array.from(new Set(allPapers.map((p) => p.syllabus_code))).sort();
+  const syllabusFilter = searchParams.syllabus && syllabuses.includes(searchParams.syllabus) ? searchParams.syllabus : '0625';
+  const papers = allPapers.filter((p) => p.syllabus_code === syllabusFilter);
 
   const paperFilter = searchParams.paper ? parseInt(searchParams.paper, 10) : null;
   const yearFilter = searchParams.year ? parseInt(searchParams.year, 10) : null;
@@ -50,15 +64,19 @@ export default async function PastPapersPage({
     return SESSION_ORDER[sb] - SESSION_ORDER[sa];
   });
 
-  const buildHref = (params: { paper?: number | null; year?: number | null }) => {
+  const buildHref = (params: { syllabus?: string; paper?: number | null; year?: number | null }) => {
     const sp = new URLSearchParams();
-    const p = params.paper !== undefined ? params.paper : paperFilter;
-    const y = params.year !== undefined ? params.year : yearFilter;
+    const syl = params.syllabus !== undefined ? params.syllabus : syllabusFilter;
+    const p = params.paper !== undefined ? params.paper : params.syllabus !== undefined ? null : paperFilter;
+    const y = params.year !== undefined ? params.year : params.syllabus !== undefined ? null : yearFilter;
+    if (syl !== '0625') sp.set('syllabus', syl);
     if (p !== null && p !== undefined) sp.set('paper', String(p));
     if (y !== null && y !== undefined) sp.set('year', String(y));
     const qs = sp.toString();
     return qs ? `/past-papers?${qs}` : '/past-papers';
   };
+
+  const label = SYLLABUS_LABELS[syllabusFilter] ?? { short: syllabusFilter, heading: `Cambridge IGCSE Physics · ${syllabusFilter}` };
 
   const pill = (active: boolean) =>
     `text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition-colors ${
@@ -71,15 +89,15 @@ export default async function PastPapersPage({
     <div className="min-h-screen bg-[#faf7f0]" style={{ backgroundImage: 'radial-gradient(#e6ddc4 0.6px, transparent 0.6px)', backgroundSize: '18px 18px' }}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <p className="font-mono text-[11px] tracking-wide uppercase text-[#4a5a72] mb-2">
-          Cambridge IGCSE Physics · 0625
+          {label.heading}
         </p>
         <h1 className="text-[32px] font-bold text-[#1b2a41] mb-2" style={{ fontFamily: 'Georgia, serif' }}>
           Past Papers
         </h1>
-        <p className="text-[14px] text-[#4a5a72] leading-snug mb-8 max-w-2xl">
-          Every session from 2018 onward. Record your mark on each paper to track your progress, and work through the
-          video solutions as they are published.{' '}
-          {withFiles === 0 && (
+        <p className="text-[14px] text-[#4a5a72] leading-snug mb-6 max-w-2xl">
+          Record your mark on each paper to track your progress, and work through the video solutions as they are
+          published.{' '}
+          {withFiles === 0 && syllabusFilter === '0625' && (
             <>
               Download the papers themselves from{' '}
               <a
@@ -93,7 +111,26 @@ export default async function PastPapersPage({
               or your school.
             </>
           )}
+          {withFiles === 0 && syllabusFilter !== '0625' && 'Download the papers themselves from Cambridge or your school.'}
         </p>
+
+        {syllabuses.length > 1 && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {syllabuses.map((code) => (
+              <Link
+                key={code}
+                href={buildHref({ syllabus: code })}
+                className={`text-[13px] font-semibold px-3.5 py-1.5 rounded-full border transition-colors ${
+                  syllabusFilter === code
+                    ? 'bg-[#2e7d6b] text-white border-[#2e7d6b]'
+                    : 'bg-white text-[#1b2a41] border-[#d8cfb6] hover:bg-[#f5f0e2]'
+                }`}
+              >
+                {SYLLABUS_LABELS[code]?.short ?? code}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {!user && (
           <div className="bg-white border border-[#e4ddcc] rounded-lg px-4 py-3 mb-6 text-[13px] text-[#4a5a72]">

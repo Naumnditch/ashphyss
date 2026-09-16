@@ -8,6 +8,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { query } from '@/lib/db/client';
 
 const SESSIONS = ['Feb/Mar', 'May/Jun', 'Oct/Nov'];
+const SYLLABUSES = ['0625', '0972'];
 
 export async function GET() {
   const admin = await getCurrentUser();
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
+    syllabus_code: syllabusCode,
     year,
     session,
     paper_number: paperNumber,
@@ -46,12 +48,15 @@ export async function POST(req: NextRequest) {
   if (paperNumber < 1 || paperNumber > 6) {
     return NextResponse.json({ success: false, error: 'paper_number must be between 1 and 6' }, { status: 400 });
   }
+  if (syllabusCode && !SYLLABUSES.includes(syllabusCode)) {
+    return NextResponse.json({ success: false, error: `syllabus_code must be one of ${SYLLABUSES.join(', ')}` }, { status: 400 });
+  }
 
   const result = await query(
     `INSERT INTO past_papers
-       (year, session, paper_number, variant, question_paper_url, mark_scheme_url,
+       (syllabus_code, year, session, paper_number, variant, question_paper_url, mark_scheme_url,
         explanation_status, explanation_video_url, explanation_notes, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (syllabus_code, year, session, paper_number, variant)
      DO UPDATE SET
        question_paper_url = EXCLUDED.question_paper_url,
@@ -62,6 +67,7 @@ export async function POST(req: NextRequest) {
        updated_at = now()
      RETURNING *`,
     [
+      syllabusCode || '0625',
       year,
       session,
       paperNumber,

@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Fixed "Network error during upload" on bulk/single past-paper and booklet uploads — signed-URL direct-to-storage rewrite)
+Last updated: 2026-09-16 (Past papers now support a second Cambridge syllabus — 0972 IGCSE (9-1) Physics — alongside 0625, auto-created on upload)
 
 ---
 
@@ -1620,3 +1620,65 @@ Two distinct visual systems, intentionally:
   blocked by the environment's egress proxy (same standing restriction
   that blocks browser access to the live site from here). Recommend
   trying a single file first before running a full batch.
+
+### Added: second past-paper syllabus (0972, Cambridge IGCSE (9-1) Physics)
+
+- WHY: after the upload fix above, the user's first real bulk-upload
+  attempt correctly surfaced a genuine second bug rather than the
+  original one — 6 files named `0972_w23_qp_*.pdf` were all skipped
+  with "no Oct/Nov 2023 P*V1 slot exists". `0972` is Cambridge's
+  parallel "IGCSE (9-1) Physics" syllabus (same six-paper structure as
+  0625, different code, different grading scale, sold and examined as
+  a separate qualification) — the `past_papers` table only had 0625
+  rows (336, seeded earlier this project), so every 0972 filename
+  correctly found no matching slot rather than being mis-filed. Asked
+  the user directly rather than guessing at intent; they confirmed
+  they want 0972 supported as a genuine second syllabus alongside
+  0625, not a one-off correction.
+- FIX, three parts:
+  1. `app/api/admin/past-papers/bulk/route.ts` — `prepareOne` now
+     UPSERTs the `past_papers` row (`INSERT ... ON CONFLICT (syllabus_
+     code, year, session, paper_number, variant) DO UPDATE SET
+     updated_at = now() RETURNING id`) instead of requiring the row to
+     already exist. This auto-creates a slot for ANY syllabus code
+     found in an uploaded filename, the moment a matching file is
+     first uploaded — deliberately not pre-seeding 336 more rows for
+     0972 the way 0625 was seeded, since Cambridge's exact 0972 exam
+     calendar (which years/sessions actually ran) isn't something to
+     guess at from this sandbox, and an upsert-on-sight generalizes to
+     any future syllabus too. A `PAPER_META` map (name/tier/max_marks
+     per paper 1-6) is shared across syllabuses since the six-paper
+     structure, tiers and mark totals are the same for 0625 and 0972 —
+     verified this specific INSERT/ON CONFLICT statement directly
+     against the real `past_papers` unique constraint via Supabase
+     (confirmed `UNIQUE (syllabus_code, year, session, paper_number,
+     variant)` matches exactly) inside a rolled-back transaction before
+     shipping.
+  2. `app/api/admin/past-papers/route.ts` + `components/admin/
+     PastPaperManager.tsx` — the single-entry admin form gains a
+     Syllabus dropdown (0625 / 0972); the API now accepts and validates
+     `syllabus_code` instead of silently defaulting every manual entry
+     to 0625. The manual-upload storage path also gained a syllabus
+     segment (`{syllabus}/{year}-{session}/...`) to avoid colliding
+     with a same-numbered 0625 paper's file. The admin entries list
+     shows each row's syllabus code and it's now part of the filter
+     text.
+  3. `app/past-papers/page.tsx` — the public page no longer hardcodes
+     "0625" in its heading/copy. It derives the set of syllabuses
+     actually present in the DB, defaults to 0625, and (only once a
+     second syllabus has real rows) shows a tab row to switch between
+     them — papers from different syllabuses are never mixed under the
+     same "Paper 4 2023" heading, since they're different exams.
+     Switching syllabus resets the paper/year filters. The "download
+     from Cambridge's own portal" deep link is kept 0625-only (its
+     exact 0972 URL slug couldn't be verified — outbound access to
+     cambridgeinternational.org is blocked from this sandbox); 0972
+     gets a plain, non-hyperlinked pointer to Cambridge/the school
+     instead of a guessed link.
+- `npx tsc --noEmit` and `npm run build` both clean; scanned all
+  changed files for `\u` escapes — none. The 0972 tab won't appear on
+  the live site until the user's next bulk-upload attempt actually
+  creates a 0972 row (none exist yet as of this fix) — that upload
+  itself is the remaining real-world test, since Storage's exact
+  signed-upload contract still can't be exercised from this sandbox
+  (see the upload-fix entry above).

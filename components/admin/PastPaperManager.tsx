@@ -6,6 +6,7 @@ import { putFileToSignedUrl } from '@/lib/storage/directUpload';
 
 interface PastPaper {
   id: string;
+  syllabus_code: string;
   year: number;
   session: string;
   paper_number: number;
@@ -18,6 +19,10 @@ interface PastPaper {
 }
 
 const SESSIONS = ['Feb/Mar', 'May/Jun', 'Oct/Nov'];
+const SYLLABUSES: Record<string, string> = {
+  '0625': '0625 — IGCSE Physics',
+  '0972': '0972 — IGCSE (9-1) Physics',
+};
 const PAPER_LABELS: Record<number, string> = {
   1: 'Paper 1 — MCQ Core',
   2: 'Paper 2 — MCQ Extended',
@@ -28,6 +33,7 @@ const PAPER_LABELS: Record<number, string> = {
 };
 
 const emptyForm = {
+  syllabus_code: '0625',
   year: new Date().getFullYear(),
   session: 'May/Jun',
   paper_number: 4,
@@ -55,7 +61,7 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
     setUploading(kind);
     setUploadError(null);
     try {
-      const path = `${form.year}-${slug(form.session)}/paper-${form.paper_number}-v${form.variant}-${kind}.pdf`;
+      const path = `${form.syllabus_code}/${form.year}-${slug(form.session)}/paper-${form.paper_number}-v${form.variant}-${kind}.pdf`;
       const res = await fetch('/api/admin/past-papers/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,6 +130,7 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
 
   const loadForEdit = (p: PastPaper) => {
     setForm({
+      syllabus_code: p.syllabus_code,
       year: p.year,
       session: p.session,
       paper_number: p.paper_number,
@@ -142,7 +149,19 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
       {/* ---- Add / edit form ---- */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-8">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Add / Update Entry</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Syllabus</label>
+            <select
+              value={form.syllabus_code}
+              onChange={(e) => setForm({ ...form, syllabus_code: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              {Object.entries(SYLLABUSES).map(([code, label]) => (
+                <option key={code} value={code}>{label}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
             <input
@@ -293,7 +312,7 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter — e.g. 2023 or Paper 4 or May"
+          placeholder="Filter — e.g. 2023 or Paper 4 or May or 0972"
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-72"
         />
       </div>
@@ -302,7 +321,7 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
         {papers
           .filter((p) => {
             if (!filter.trim()) return true;
-            const hay = `${p.year} ${p.session} paper ${p.paper_number} variant ${p.variant} ${PAPER_LABELS[p.paper_number] ?? ''}`.toLowerCase();
+            const hay = `${p.syllabus_code} ${p.year} ${p.session} paper ${p.paper_number} variant ${p.variant} ${PAPER_LABELS[p.paper_number] ?? ''}`.toLowerCase();
             return filter.toLowerCase().split(/\s+/).every((t) => hay.includes(t));
           })
           .slice(0, 80)
@@ -310,6 +329,7 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
           <div key={p.id} className="px-5 py-3.5 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <div className="font-medium text-gray-900 text-[14.5px]">
+                <span className="font-mono text-xs text-gray-400 mr-1.5">{p.syllabus_code}</span>
                 {p.year} {p.session} · {PAPER_LABELS[p.paper_number]} · Variant {p.variant}
               </div>
               <div className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">

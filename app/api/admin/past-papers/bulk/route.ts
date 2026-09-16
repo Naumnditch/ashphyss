@@ -8,10 +8,14 @@
  *
  * action: "prepare" — JSON { files: [{ name, size, type }] } (metadata
  *   only). For each file, reads its Cambridge filename (0625_s23_qp_42.pdf
- *   = May/June 2023 Paper 4 Variant 2 question paper), checks a matching
- *   past_papers row exists, and mints a signed upload URL. Anything that
- *   doesn't match — wrong name, wrong type, too big, no such slot — is
- *   skipped and reported rather than guessed at.
+ *   = May/June 2023 Paper 4 Variant 2 question paper), upserts the matching
+ *   past_papers row (any syllabus code in the filename — not just 0625 —
+ *   auto-creates its slot on first sight, since Cambridge runs several
+ *   parallel syllabuses, e.g. 0972 IGCSE (9-1) Physics, with the same paper
+ *   structure but a different code, and guessing which years/sessions to
+ *   pre-seed for each one isn't reliable), and mints a signed upload URL.
+ *   Only real problems are skipped and reported rather than guessed at:
+ *   wrong name, wrong type, too big, or a paper number outside 1-6.
  *
  * action: "confirm" — JSON { updates: [{ paperId, column, publicUrl }] },
  *   sent after the browser has PUT each file directly to its signed URL.
@@ -26,6 +30,18 @@ import { createSignedUploadUrl, publicStorageUrl } from '@/lib/storage/signedUpl
 
 const BUCKET = 'past-papers';
 const MAX_BYTES = 20 * 1024 * 1024;
+
+/** Paper structure is the same across Cambridge's parallel IGCSE syllabuses
+ *  (e.g. 0625 and the 9-1 variant 0972) — same six papers, same tiers and
+ *  marks — so this map isn't syllabus-specific. */
+const PAPER_META: Record<number, { name: string; tier: string | null; maxMarks: number }> = {
+  1: { name: 'Multiple Choice', tier: 'Core', maxMarks: 40 },
+  2: { name: 'Multiple Choice', tier: 'Extended', maxMarks: 40 },
+  3: { name: 'Theory', tier: 'Core', maxMarks: 80 },
+  4: { name: 'Theory', tier: 'Extended', maxMarks: 80 },
+  5: { name: 'Practical Test', tier: null, maxMarks: 40 },
+  6: { name: 'Alternative to Practical', tier: null, maxMarks: 40 },
+};
 
 interface FileMeta {
   name: string;
@@ -52,15 +68,16 @@ async function prepareOne(f: FileMeta): Promise<PrepareOk | PrepareSkip> {
   if (!parsed) return { name: f.name, ok: false, reason: 'filename not in Cambridge format' };
   if (f.type !== 'application/pdf') return { name: f.name, ok: false, reason: 'not a PDF' };
   if (f.size > MAX_BYTES) return { name: f.name, ok: false, reason: 'over 20 MB' };
+  const meta = PAPER_META[parsed.paperNumber];
+  if (!meta) return { name: f.name, ok: false, reason: `paper number ${parsed.paperNumber} is outside 1-6` };
 
   const rowRes = await query(
-    `SELECT id FROM past_papers
-     WHERE syllabus_code = $1 AND year = $2 AND session = $3 AND paper_number = $4 AND variant = $5`,
-    [parsed.syllabus, parsed.year, parsed.session, parsed.paperNumber, parsed.variant]
+    `INSERT INTO past_papers (syllabus_code, year, session, paper_number, variant, paper_name, tier, max_marks)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (syllabus_code, year, session, paper_number, variant) DO UPDATE SET updated_at = now()
+     RETURNING id`,
+    [parsed.syllabus, parsed.year, parsed.session, parsed.paperNumber, parsed.variant, meta.name, meta.tier, meta.maxMarks]
   );
-  if (rowRes.rows.length === 0) {
-    return { name: f.name, ok: false, reason: `no ${parsed.session} ${parsed.year} P${parsed.paperNumber}V${parsed.variant} slot exists` };
-  }
   const paperId = rowRes.rows[0].id;
   const path = `${parsed.syllabus}/${parsed.year}-${parsed.session.replace('/', '-')}/${f.name.toLowerCase()}`;
 
