@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db/client';
 import { verifyOsbHash, decodeOsbPayload } from '@/lib/shopier/client';
+import { monthsForBillingCycle } from '@/lib/billing';
 
 // Some notification systems ping with GET to check reachability first.
 export async function GET() {
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (!order.is_test && !isTest && order.student_id && order.plan_id) {
-      const months = order.billing_cycle === 'yearly' ? 12 : 1;
+      const months = monthsForBillingCycle(order.billing_cycle);
       await query(
         `INSERT INTO subscriptions (student_id, plan_id, tier, status, billing_cycle, start_date, end_date)
          VALUES ($1, $2, 'premium', 'active', $3, now(), now() + ($4 || ' months')::interval)

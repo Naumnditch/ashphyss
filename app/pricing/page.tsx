@@ -1,27 +1,15 @@
 import Link from 'next/link';
 import { query } from '@/lib/db/client';
 import { getCurrentUser } from '@/lib/auth/session';
-import { getBankSettings, paymentReference, getUsdRate, tryToUsd } from '@/lib/settings';
+import { getBankSettings, paymentReference, getUsdRate } from '@/lib/settings';
+import { PricingCards, type PricingPlan } from '@/components/PricingCards';
 
 export const dynamic = 'force-dynamic';
 
-interface Plan {
-  id: string;
-  name: string;
-  slug: string;
-  tier_level: number;
-  description: string | null;
-  price_monthly: string;
-  price_yearly: string;
-  features: string[] | null;
-  shopier_url_monthly: string | null;
-  shopier_url_yearly: string | null;
-}
-
-async function getPlans(): Promise<Plan[]> {
+async function getPlans(): Promise<PricingPlan[]> {
   const res = await query(
-    `SELECT id, name, slug, tier_level, description, price_monthly, price_yearly, features,
-            shopier_url_monthly, shopier_url_yearly
+    `SELECT id, name, slug, tier_level, description, price_monthly, price_quarterly, price_yearly, features,
+            shopier_url_monthly, shopier_url_quarterly, shopier_url_yearly
      FROM subscription_plans WHERE is_active ORDER BY tier_level`
   );
   return res.rows;
@@ -43,92 +31,7 @@ export default async function PricingPage() {
           teacher, not a content farm.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
-          {plans.map((p) => {
-            const isFree = p.tier_level === 0;
-            const features: string[] = Array.isArray(p.features) ? p.features : [];
-            return (
-              <div
-                key={p.id}
-                className={`bg-white border rounded-xl p-6 flex flex-col ${
-                  p.tier_level === 1 ? 'border-[#b8823d] shadow-sm' : 'border-[#e4ddcc]'
-                }`}
-              >
-                {p.tier_level === 1 && (
-                  <span className="self-start text-[10px] font-bold uppercase tracking-wide bg-[#f6efdc] text-[#8f6428] px-2 py-0.5 rounded-full mb-3">
-                    Most popular
-                  </span>
-                )}
-                <h2 className="text-[20px] font-bold text-[#1b2a41] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-                  {p.name}
-                </h2>
-                <div className="mb-3">
-                  <span className="text-[30px] font-bold text-[#1b2a41]">{isFree ? '0' : parseFloat(p.price_monthly).toFixed(0)}</span>
-                  <span className="text-[13px] text-[#4a5a72] ml-1">TRY / month</span>
-                  {!isFree && (
-                    <div className="text-[12px] text-[#a8a196] mt-0.5">
-                      approx. ${tryToUsd(parseFloat(p.price_monthly), usdRate)} USD
-                    </div>
-                  )}
-                  {!isFree && parseFloat(p.price_yearly) > 0 && (
-                    <div className="text-[12px] text-[#4a5a72] mt-1.5 pt-1.5 border-t border-[#eee6d3]">
-                      or {parseFloat(p.price_yearly).toFixed(0)} TRY / year
-                      <span className="text-[#a8a196]"> · approx. ${tryToUsd(parseFloat(p.price_yearly), usdRate)} USD</span>
-                    </div>
-                  )}
-                </div>
-                {p.description && <p className="text-[12.5px] text-[#4a5a72] leading-snug mb-4">{p.description}</p>}
-                {features.length > 0 && (
-                  <ul className="space-y-1.5 mb-5 flex-1">
-                    {features.map((f, i) => (
-                      <li key={i} className="text-[12.5px] text-[#4a5a72] flex gap-2">
-                        <span className="text-[#2e7d6b] flex-shrink-0">✓</span>
-                        <span>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-auto pt-2 space-y-2">
-                  {isFree ? (
-                    <Link
-                      href={user ? '/curriculum' : '/auth/signup'}
-                      className="block text-center text-[13px] font-semibold px-4 py-2.5 rounded-lg border border-[#d8cfb6] text-[#1b2a41] hover:bg-[#faf7f0]"
-                    >
-                      {user ? 'Browse the curriculum' : 'Create a free account'}
-                    </Link>
-                  ) : (
-                    <>
-                      {p.shopier_url_monthly ? (
-                        <a
-                          href={p.shopier_url_monthly}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-center text-[13px] font-semibold px-4 py-2.5 rounded-lg bg-[#1b2a41] text-white hover:bg-[#243a5e]"
-                        >
-                          Subscribe monthly
-                        </a>
-                      ) : (
-                        <span className="block text-center text-[12.5px] px-4 py-2.5 rounded-lg bg-[#f5f0e2] text-[#8f6428]">
-                          Checkout link coming soon
-                        </span>
-                      )}
-                      {p.shopier_url_yearly && (
-                        <a
-                          href={p.shopier_url_yearly}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-center text-[13px] font-semibold px-4 py-2.5 rounded-lg border border-[#1b2a41] text-[#1b2a41] hover:bg-[#faf7f0]"
-                        >
-                          Subscribe yearly
-                        </a>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <PricingCards plans={plans} usdRate={usdRate} signedIn={!!user} />
 
         {bank.enabled && bank.iban && (
           <div className="bg-white border-2 border-[#2e7d6b] rounded-xl p-6 mb-6">

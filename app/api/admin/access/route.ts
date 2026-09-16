@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { query } from '@/lib/db/client';
+import { billingCycleForMonths } from '@/lib/billing';
 
 export async function POST(req: NextRequest) {
   const admin = await getCurrentUser();
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
        billing_cycle = EXCLUDED.billing_cycle,
        end_date = GREATEST(COALESCE(subscriptions.end_date, now()), now()) + ($5 || ' months')::interval,
        updated_at = now()`,
-    [student.id, plan.id, tier, m >= 12 ? 'yearly' : 'monthly', m]
+    [student.id, plan.id, tier, billingCycleForMonths(m), m]
   );
 
   await query(

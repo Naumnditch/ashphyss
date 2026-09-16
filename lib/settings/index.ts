@@ -1,5 +1,7 @@
 import { query } from '@/lib/db/client';
 
+export { tryToUsd } from '@/lib/currency';
+
 /** Approximate TRY→USD rate, kept as an admin-editable setting rather than a live
  *  feed: a stale-but-labelled figure is safer than a page that breaks when an
  *  exchange API is down, and every price is shown as "approx." anyway. */
@@ -7,12 +9,6 @@ export async function getUsdRate(): Promise<number> {
   const res = await query(`SELECT value FROM site_settings WHERE key = 'usd_rate'`);
   const v = parseFloat(res.rows[0]?.value ?? '');
   return Number.isFinite(v) && v > 0 ? v : 47.18;
-}
-
-export function tryToUsd(amountTry: number, rate: number): string {
-  const usd = amountTry / rate;
-  if (usd <= 0) return '0';
-  return usd >= 100 ? usd.toFixed(0) : usd.toFixed(usd < 10 ? 2 : 1);
 }
 
 export interface BankSettings {

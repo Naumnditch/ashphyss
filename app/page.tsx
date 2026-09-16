@@ -10,7 +10,6 @@ export const dynamic = 'force-dynamic';
 interface PlanRow {
   name: string;
   slug: string;
-  price_monthly: string;
   price_yearly: string;
   features: string[];
 }
@@ -33,7 +32,7 @@ async function getStats() {
 async function getPlans(): Promise<PlanRow[]> {
   try {
     const result = await query(
-      `SELECT name, slug, price_monthly, price_yearly, features FROM subscription_plans WHERE is_active = TRUE ORDER BY tier_level ASC`
+      `SELECT name, slug, price_yearly, features FROM subscription_plans WHERE is_active = TRUE ORDER BY tier_level ASC`
     );
     return result.rows;
   } catch {
@@ -261,7 +260,9 @@ export default async function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               {plans.map((plan, i) => {
                 const isPro = plan.slug === 'pro';
-                const monthly = parseFloat(plan.price_monthly);
+                // Shown at the 12-month rate (cheapest commitment) — matches
+                // the default toggle position on /pricing, not the 1-month price.
+                const monthly = plan.slug === 'free' ? 0 : Math.round(parseFloat(plan.price_yearly) / 12);
                 return (
                   <Reveal key={plan.slug} delay={i * 100}>
                     <div
@@ -277,7 +278,9 @@ export default async function HomePage() {
                           {monthly === 0 ? 'Free' : `${monthly.toFixed(0)} TRY`}
                         </span>
                         {monthly > 0 && (
-                          <span className={isPro ? 'text-gray-400 text-sm' : 'text-gray-400 text-sm'}>/mo</span>
+                          <span className={isPro ? 'text-gray-400 text-sm' : 'text-gray-400 text-sm'}>
+                            /mo, billed yearly
+                          </span>
                         )}
                       </div>
                       <ul className="space-y-2 mb-6 flex-1">
@@ -309,7 +312,10 @@ export default async function HomePage() {
               })}
             </div>
             <p className="text-center text-xs text-gray-400 mt-6">
-              Prices shown are introductory and subject to change. Yearly billing available at checkout.
+              Shown at the 12-month rate — 1 and 3-month plans available too.{' '}
+              <Link href="/pricing" className="text-blue-600 hover:underline font-medium">
+                See full pricing &amp; billing options →
+              </Link>
             </p>
           </div>
         </section>

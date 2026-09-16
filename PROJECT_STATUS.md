@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Session/device-limit auth system: sign in on at most 2 devices, revocable sessions, login rate limiting, JWT_SECRET no longer falls back to an insecure default)
+Last updated: 2026-09-16 (Pricing restructured to a commitment model: 1/3/12-month plans shown as per-month price with savings badge; also the session/device-limit auth system below — both awaiting the same JWT_SECRET confirmation before push, see that entry)
 
 ---
 
@@ -1836,3 +1836,104 @@ student-facing devices page, and admin visibility. All shipped.
   confirming the third succeeds) — this sandbox has no browser access
   to the live site, same standing limitation noted throughout this
   file. Worth doing once deployed, alongside confirming JWT_SECRET.
+
+### Added: commitment-style pricing (1/3/12-month plans, per-month display)
+
+Save-My-Exams-style restructure: each paid plan is sold as a 1-month,
+3-month, or 12-month commitment, always shown as an effective
+per-month price with what it's actually billed at underneath —
+instead of the old flat "monthly or yearly" two-button layout.
+
+- DATABASE (real migration, not ad-hoc — `add_quarterly_billing_period`):
+  - `subscription_plans` gained `price_quarterly` (numeric) and
+    `shopier_url_quarterly` (text), alongside the existing `_monthly`/
+    `_yearly` columns. Meaning kept consistent: each price column is
+    the TOTAL charged for that whole period (1/3/12 months), not a
+    monthly rate — `price_quarterly` is what a 3-month commitment
+    costs in total, same convention `price_yearly` already used.
+  - New prices: Free 0/0/0, Plus 349/747/2388, Pro 999/2697/9588
+    (monthly/quarterly/yearly). Chosen so Plus's 12-month rate
+    (2388/12 = 199) is exactly 43% off its 1-month rate (349) — the
+    "Save 43%" example given in the spec, confirmed by running the
+    actual savings-percent formula from the real component source
+    against these exact numbers before shipping.
+  - `shopier_orders.billing_cycle` had a CHECK constraint limited to
+    `('monthly', 'yearly')` — found by querying `pg_constraint`
+    directly rather than assuming from column type, and extended to
+    include `'quarterly'` in the same migration. `subscriptions.
+    billing_cycle` turned out to already be unconstrained free text,
+    so no constraint change was needed there.
+  - New `lib/billing.ts`: `billingCycleForMonths()` / `monthsForBilling
+    Cycle()` — every place that previously hardcoded `months >= 12 ?
+    'yearly' : 'monthly'` (admin manual grant, receipt-approval grant)
+    or `billing_cycle === 'yearly' ? 12 : 1` (the Shopier OSB callback,
+    which would have silently granted only 1 month for a quarterly
+    order under the old binary logic) now goes through these shared
+    functions instead. The receipt-upload flow (`/subscribe/verify`,
+    `payment_requests.months`) already stored a raw month integer with
+    no enum at all, so it needed no schema change — 3-month requests
+    already worked there before this, just weren't reflected in the
+    subscription's own `billing_cycle` label correctly until now.
+
+- `/pricing` PAGE REDESIGN:
+  - New `components/PricingCards.tsx` (client component): a pill
+    toggle — 1 month / 3 months / 12 months, defaulting to 12 — drives
+    every card at once without a page navigation. Each card shows the
+    effective per-month price for the selected period (`total /
+    {1,3,12}`, rounded), a "billed at X TRY every 3 months" / "billed
+    at X TRY / year" / "1-month rolling plan" line underneath, and the
+    approx.-USD line kept from before (now converted from the
+    per-month figure, matching what's actually displayed).
+  - Savings badge ("Save N%") computed live from the DB values
+    (`1 - perMonth/price_monthly`), not hardcoded — it simply reads 0
+    and disappears if prices ever change. "Best value" badge replaces
+    the evergreen "Most popular" tag on Plus specifically when the
+    12-month toggle is selected (both live on the same ribbon slot
+    rather than stacking two badges).
+  - Free card now reads "Free" / "free forever" instead of "0 TRY /
+    month", untouched by the toggle. CTA still per-period
+    (`shopier_url_monthly/_quarterly/_yearly` matching the selected
+    toggle) with the existing "Checkout link coming soon" fallback
+    when a link is null — none of the three are filled in yet (see the
+    still-open Shopier product-link action item elsewhere in this
+    file), so every paid CTA currently shows that fallback regardless
+    of period, which is correct/expected, not a bug.
+  - Kept the site's own visual system throughout (cream background,
+    navy/brass palette, Georgia serif headings) — deliberately not
+    copying Save My Exams' own look, only the commitment-tiers idea.
+  - `tryToUsd()` moved out of `lib/settings` into a new pure
+    `lib/currency.ts`, re-exported from `lib/settings` for every
+    existing server-side caller unchanged. Necessary, not cosmetic:
+    `lib/settings` imports the pg-backed `query()` helper, and
+    `PricingCards` is a client component that recomputes the USD line
+    on every toggle click — importing anything from `lib/settings`
+    there would have pulled Node's `pg` driver into the browser
+    bundle. Confirmed the fix worked by checking the built `/pricing`
+    bundle size (1.71 kB — small, not bloated by a DB driver).
+
+- LANDING PAGE (`app/page.tsx`) pricing section: now shows
+  `price_yearly / 12` (rounded) instead of the flat `price_monthly` —
+  no more stale 99/179 next to the real 349/999 shown on `/pricing`.
+  Footnote rewritten from the now-inaccurate "Yearly billing available
+  at checkout" to state plainly it's the 12-month rate and link to
+  `/pricing` for the 1- and 3-month options.
+
+- VERIFICATION: `npx tsc --noEmit` and `npm run build` both clean;
+  scanned every new/changed file for `\u` escapes — none. Verified the
+  migration landed correctly by re-querying `subscription_plans` and
+  `pg_constraint` directly after applying it. Ran the actual per-month/
+  savings-percent arithmetic from the real `PricingCards.tsx` logic
+  (copied inline, same formulas) against the real seeded prices for
+  all three plans × all three periods, and separately imported and ran
+  the real `lib/currency.ts` `tryToUsd()` against representative
+  amounts — both match by hand-check. NOT yet verified by loading
+  `/pricing` in an actual browser and clicking through all three
+  toggle states (this sandbox has no browser access to the live site,
+  the standing limitation noted throughout this file) — worth doing
+  once deployed.
+- NOT PUSHED YET: this commit sits on the same branch as, and after,
+  the session/device-limit auth commit above — which is deliberately
+  held back pending confirmation that `JWT_SECRET` is set in Vercel's
+  Production environment (see that entry). Since a git push moves the
+  whole branch, this pricing work is blocked on the same confirmation,
+  even though it doesn't touch JWT_SECRET itself.
