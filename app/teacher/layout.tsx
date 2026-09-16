@@ -17,6 +17,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-500">{user.firstName} {user.lastName}</span>
+            <Link href="/account/devices" className="text-sm text-gray-500 hover:text-gray-900">My Devices</Link>
             <LogoutButton className="text-sm font-medium text-gray-500 hover:text-red-600 border border-gray-300 hover:border-red-300 rounded-lg px-3.5 py-1.5 transition-colors" />
           </div>
         </div>

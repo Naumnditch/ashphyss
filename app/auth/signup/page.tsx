@@ -45,10 +45,6 @@ export default function SignUpPage() {
         return;
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('token', data.data.token);
-      }
-
       if (accountType === 'teacher') {
         router.push('/teacher/pending');
       } else {

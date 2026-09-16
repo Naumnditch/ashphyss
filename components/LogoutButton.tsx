@@ -12,10 +12,7 @@ export function LogoutButton({ className }: { className?: string }) {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {
-      // proceed with client-side cleanup regardless
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
+      // proceed with client-side redirect regardless
     }
     router.push('/');
     router.refresh();

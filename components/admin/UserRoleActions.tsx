@@ -19,10 +19,12 @@ export function UserRoleActions({
   userId,
   role,
   status,
+  activeSessions,
 }: {
   userId: string;
   role: string;
   status: string;
+  activeSessions: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,6 +38,19 @@ export function UserRoleActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       });
+      if (res.ok) {
+        router.refresh();
+        setOpen(false);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const revokeAllSessions = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/revoke-sessions`, { method: 'POST' });
       if (res.ok) {
         router.refresh();
         setOpen(false);
@@ -85,6 +100,17 @@ export function UserRoleActions({
                 {s} {s === status && '✓'}
               </button>
             ))}
+            <div className="border-t border-gray-100 my-1.5" />
+            <div className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+              Sessions ({activeSessions} active)
+            </div>
+            <button
+              disabled={loading || activeSessions === 0}
+              onClick={revokeAllSessions}
+              className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:text-gray-300 disabled:cursor-default"
+            >
+              Sign out all devices
+            </button>
           </div>
         </>
       )}

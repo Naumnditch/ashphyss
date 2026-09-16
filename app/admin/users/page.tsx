@@ -23,7 +23,10 @@ async function getUsers(search: string, role: string) {
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const result = await query(
-    `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.status, u.created_at, s.name as section_name
+    `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.status, u.created_at, s.name as section_name,
+            (SELECT COUNT(*) FROM sessions ss
+             WHERE ss.user_id = u.id AND ss.revoked_at IS NULL AND ss.created_at > now() - interval '90 days'
+            )::int AS active_sessions
      FROM users u
      LEFT JOIN sections s ON s.id = u.section_id
      ${where}
@@ -97,13 +100,16 @@ export default async function AdminUsersPage({
                   <div className="text-xs text-gray-400 truncate">
                     {u.email}
                     {u.section_name && <span> · {u.section_name}</span>}
+                    <span className={u.active_sessions >= 2 ? 'text-amber-600 font-medium' : ''}>
+                      {' '}· {u.active_sessions} device{u.active_sessions === 1 ? '' : 's'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex-shrink-0">
                   {currentUser?.id === u.id ? (
                     <span className="text-[11px] text-gray-300">can&rsquo;t edit yourself</span>
                   ) : (
-                    <UserRoleActions userId={u.id} role={u.role} status={u.status} />
+                    <UserRoleActions userId={u.id} role={u.role} status={u.status} activeSessions={u.active_sessions} />
                   )}
                 </div>
               </div>

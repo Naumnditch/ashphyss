@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (Past papers now support a second Cambridge syllabus — 0972 IGCSE (9-1) Physics — alongside 0625, auto-created on upload)
+Last updated: 2026-09-16 (Session/device-limit auth system: sign in on at most 2 devices, revocable sessions, login rate limiting, JWT_SECRET no longer falls back to an insecure default)
 
 ---
 
@@ -1682,3 +1682,157 @@ Two distinct visual systems, intentionally:
   itself is the remaining real-world test, since Storage's exact
   signed-upload contract still can't be exercised from this sandbox
   (see the upload-fix entry above).
+
+### Added: session/device-limit auth system + JWT_SECRET hardening
+
+Requested as a 6-part spec: security fixes first, then a real session
+table, device identity, login enforcement, request-time validation, a
+student-facing devices page, and admin visibility. All shipped.
+
+- SECURITY FIXES (`lib/auth/jwt.ts`):
+  - Removed the `'default-secret-key-change-in-production'` fallback.
+    The module now throws at import time if `JWT_SECRET` is missing or
+    under 32 characters — no signing or verifying with an insecure
+    default. Verified directly (unset, then set to 8 chars) that the
+    module import rejects both cases with a clear message, and that a
+    32+ char secret works normally.
+  - `JWT_SECRET` in Vercel Production: **could not be confirmed from
+    this session** — the Vercel MCP toolset available here has no
+    env-var read tool (same standing gap noted for the past-paper
+    upload fix's service-role key). This matters more than usual now:
+    if it's missing in Production, every page that renders `<Navbar>`
+    (i.e. nearly the whole site) imports `getCurrentUser()` →
+    `lib/auth/jwt.ts` and will throw at runtime. Confirmed local
+    `npm run build` behaves correctly either way (dummy secret set →
+    clean build; unset → import throws, matching what Vercel would do
+    if it's genuinely unset there) — but only checking Vercel's actual
+    Production env var settings directly can confirm the real value.
+    **Please verify `JWT_SECRET` is set in Vercel → Settings →
+    Environment Variables → Production, at least 32 characters,
+    before/immediately after this deploys.**
+  - `/api/auth/login` and `/api/auth/signup` no longer return the JWT
+    in the JSON response body — only the httpOnly cookie carries it
+    now (the client never read it for anything else; grepped the
+    whole app for `Authorization: Bearer` / `getTokenFromHeader` usage
+    and found none). This required fixing three dead-end client reads
+    of `data.data.token` into `localStorage` (login page, signup page,
+    the old `/dashboard` client-side gate) — `/dashboard` is now
+    protected server-side by `middleware.ts` instead, like `/teacher`
+    and `/admin` already were.
+  - Login rate limiting: new `login_attempts` table (email, ip,
+    attempted_at). 8 failed attempts for the same email within a
+    sliding 15-minute window → 429 `too_many_attempts`, checked BEFORE
+    the password (or even user-existence) is checked, so a
+    nonexistent-email guess costs the same as a real one. No explicit
+    reset job needed — the sliding window naturally stops counting an
+    attempt once it's >15 minutes old. Verified directly against the
+    real table (rolled back): 8 attempts inside the window reads as
+    blocked; the same rows aged to 20 minutes old read as 0 attempts
+    (unblocked).
+
+- SESSIONS TABLE + DEVICE IDENTITY:
+  - New `sessions` table: id, user_id (FK → users, ON DELETE CASCADE),
+    device_id, device_label, ip, created_at, last_seen_at, revoked_at.
+    Partial indexes on `(user_id) WHERE revoked_at IS NULL` and
+    `(user_id, device_id) WHERE revoked_at IS NULL` for the lookups
+    the login flow does on every attempt.
+  - `device_id` cookie (`lib/auth/device.ts`): a `crypto.randomUUID()`
+    set by `middleware.ts` on first visit to ANY page (1 year, NOT
+    httpOnly since nothing server-only needs to hide it, NOT cleared
+    on logout — it identifies the browser, not the session, which is
+    the whole point of a device limit). Deliberately runs only on page
+    loads, not `/api/*` — the login/signup routes independently
+    generate one if it's somehow still missing when they run, so there
+    is exactly one writer for the cookie during the request that
+    actually matters, instead of a middleware Set-Cookie and the
+    route's own Set-Cookie racing on the same header.
+  - `deviceLabelFromUserAgent()` — small dependency-free UA parser
+    ("Chrome on Windows", "Safari on iPhone"); it's a label for the
+    devices list, not used for any access decision, so it doesn't need
+    to be spoof-proof. Verified against 6 real UA strings (desktop/
+    mobile Chrome, Safari, Firefox, Edge) plus the null/unknown case.
+
+- LOGIN ENFORCEMENT (`lib/auth/sessions.ts`, max 2 devices,
+  90-day safety-net ceiling on top of explicit revocation):
+  - Same device_id already has an active session → refreshes
+    `last_seen_at`/`ip`/`device_label` and reuses it, doesn't spend a
+    slot.
+  - Under 2 active sessions → creates a new one.
+  - At 2 already → **no token is issued**. Returns 409 `device_limit`
+    with the active devices (id/label/lastSeenAt) and a 10-minute
+    `preAuthToken` (a distinct signed JWT type, `lib/auth/jwt.ts`'s
+    `generatePreAuthToken`/`verifyPreAuthToken`) proving this caller
+    just supplied the right password for this account — without it, a
+    stranger who only knows someone's email could hit the revoke
+    endpoint and sign out their devices.
+  - `POST /api/auth/sessions/revoke` accepts either a fully
+    authenticated owner of the session (the normal case from the
+    devices page) or a valid `preAuthToken` scoped to that same
+    user — mid-login case from the 409 response.
+  - `/auth/login`'s page now handles the 409 itself: shows the message,
+    lists the active devices with a Sign Out button each, and
+    auto-retries the same login once a device is freed.
+  - Signup also creates a session (reusing the same resolve function —
+    a fresh account always has 0 active sessions, so it always
+    succeeds) so a brand-new user isn't immediately logged-out-looking
+    once request-time validation (below) starts checking for one.
+
+- REQUEST-TIME VALIDATION (`lib/auth/session.ts` `getCurrentUser()`):
+  a JWT with a valid signature and unexpired `exp` is no longer
+  sufficient — it must also carry a `sessionId` whose row exists and
+  has `revoked_at IS NULL`, checked via one JOIN query on every call.
+  This is what actually makes "sign out a device" work immediately
+  rather than only once the JWT naturally expires. `last_seen_at` is
+  only rewritten when it's gone stale by more than 5 minutes, so a
+  burst of page loads from one active user doesn't hammer the table.
+  Logout now sets `revoked_at` on the current session (in addition to
+  clearing the cookie) instead of only clearing the cookie — a stolen
+  but not-yet-expired cookie from before a legitimate logout no longer
+  works either.
+  BREAKING, DELIBERATELY: every token issued before this shipped has
+  no `sessionId`, so `getCurrentUser()` treats it as logged out. Every
+  currently-logged-in user needs to log in again once after this
+  deploys — acceptable for a security fix, and no worse than the
+  existing 24h token expiry would have forced anyway.
+
+- STUDENT-FACING: `/account/devices` — lists a user's own active
+  sessions (label, IP-free display just label + last active + "This
+  device" tag matching the `device_id` cookie), Sign Out button per
+  row, no pre-auth token needed since they're already fully
+  authenticated. Linked from the student dashboard, and from the
+  teacher/admin portal header bars (no account-settings page existed
+  anywhere before this, so these are the natural landing spots).
+
+- ADMIN VISIBILITY: `/admin/users` now shows each student's active
+  device count inline (amber when at the 2-device cap — the instant
+  tell for a shared/passed-around join code or login) and a "Sign out
+  all devices" action inside the existing role/status dropdown, backed
+  by `POST /api/admin/users/[userId]/revoke-sessions`.
+
+- VERIFICATION: `npx tsc --noEmit` and `npm run build` both clean
+  (build run locally with a throwaway 48-char `JWT_SECRET`, since
+  none exists in this sandbox — see the JWT_SECRET caveat above for
+  why that specific env var now matters at build time too, not just
+  runtime). Scanned every new/changed file for `\u` escapes — none.
+  Ran the actual session-resolution and rate-limit SQL from
+  `lib/auth/sessions.ts`/`rateLimit.ts` directly against the real
+  Supabase database inside a rolled-back transaction (a throwaway test
+  user, never committed) and confirmed: two devices logging in create
+  two sessions; the same device logging in again reuses its session
+  rather than spending a third slot; a third distinct device would be
+  correctly blocked at the 2-device count; revoking one session flips
+  exactly the `revoked_at` field `getCurrentUser()`'s join checks,
+  which is what proves revocation actually invalidates that device's
+  JWT on its next request without waiting for expiry; after revoking,
+  the count drops back under the limit so the blocked device would now
+  be admitted. Separately ran the exact JWT/pre-auth-token and
+  UA-label code from the real source files under Node — token
+  round-trip, tampered-signature rejection, pre-auth vs normal token
+  type-confusion rejected both directions, and the label parser against
+  6 real User-Agent strings. Confirmed the transaction rolled back
+  cleanly (zero leftover rows) after every DB-backed check.
+  NOT verified end-to-end through a real browser (three real logins on
+  three different device_id cookies, hitting the 409, revoking one,
+  confirming the third succeeds) — this sandbox has no browser access
+  to the live site, same standing limitation noted throughout this
+  file. Worth doing once deployed, alongside confirming JWT_SECRET.

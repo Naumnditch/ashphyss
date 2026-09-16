@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db/client';
 import { hashPassword } from '@/lib/auth/password';
 import { generateToken } from '@/lib/auth/jwt';
+import { resolveLoginSession } from '@/lib/auth/sessions';
+import { DEVICE_ID_COOKIE, DEVICE_ID_MAX_AGE, deviceLabelFromUserAgent, clientIpFromHeaders } from '@/lib/auth/device';
 import { ApiResponse } from '@/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<any>>> {
@@ -76,11 +78,27 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<a
     );
 
     const user = result.rows[0];
+
+    // A brand-new account has zero active sessions, so this always
+    // succeeds — reusing resolveLoginSession just for the one INSERT
+    // rather than duplicating that logic here.
+    const existingDeviceId = req.cookies.get(DEVICE_ID_COOKIE)?.value;
+    const deviceId = existingDeviceId || crypto.randomUUID();
+    const deviceLabel = deviceLabelFromUserAgent(req.headers.get('user-agent'));
+    const ip = clientIpFromHeaders(req.headers);
+    const sessionResult = await resolveLoginSession(user.id, deviceId, deviceLabel, ip);
+    if (!sessionResult.ok) {
+      // Unreachable for a fresh account, but fail loudly rather than
+      // silently issuing a session-less token if it ever does happen.
+      return NextResponse.json({ success: false, error: 'Could not start a session' }, { status: 500 });
+    }
+
     const token = generateToken({
       id: user.id,
       email: user.email,
       role: user.role,
       sectionId: user.section_id,
+      sessionId: sessionResult.sessionId,
     });
 
     const response = NextResponse.json(
@@ -89,7 +107,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<a
         data: {
           userId: user.id,
           email: user.email,
-          token,
           role: user.role,
           status: user.status,
         },
@@ -105,6 +122,16 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<a
       path: '/',
       maxAge: 60 * 60 * 24, // 24h, matches JWT_EXPIRES_IN default
     });
+
+    if (!existingDeviceId) {
+      response.cookies.set(DEVICE_ID_COOKIE, deviceId, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: DEVICE_ID_MAX_AGE,
+      });
+    }
 
     return response;
   } catch (error) {
