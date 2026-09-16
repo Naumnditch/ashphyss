@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-07-27 (Shopier: callback rewritten to match REAL OSB contract from official example code)
+Last updated: 2026-09-16 (Equation Rearranger: Advanced tab with powers/roots + 12 seeded practice questions)
 
 ---
 
@@ -1302,3 +1302,79 @@ Two distinct visual systems, intentionally:
   route. tsc --noEmit passed; `npm run build` failed with "not a valid
   Route export field". Fixed by moving the parser to lib/. Reminder
   that the full build is the real gate, not just typecheck.
+
+## Equation Rearranger: Advanced tab, powers and square roots (2026-09-16)
+- User wanted harder equations in the rearranger: gravity, Coulomb's law,
+  capacitance, and generally "equations that have a square root in it or
+  a power." The existing engine (components/simulations/
+  EquationRearrangerSimulator.tsx) only ever modeled plain products of
+  bare symbols — no exponent, no root — so this needed a real engine
+  extension, not just new equation entries.
+- ENGINE REDESIGN: `Factor` is now a union of `var` (symbol + integer
+  exponent, e.g. r²), `const` (a NAMED, non-clickable physical constant
+  or literal number — G, k, ε₀, c, π, ½ — carrying its own fixed numeric
+  value so it never needs a "sample" entry), and `power` (an atomic
+  wrapper around a nested `Side` raised to an exponent — √(...) is just
+  exponent 0.5). `isolateSteps` is now an iterative loop (lift →
+  additive → multiplicative → denominator-clear → power/root), repeating
+  the whole cycle whenever peeling a radical exposes more structure to
+  isolate — required for T = 2π√(L/g): ÷2π first, THEN square both sides
+  to expose L/g, THEN g still needs lifting out of that denominator.
+  Isolating a squared variable (v² = 2gh solving for v) ends with a
+  genuine "take the square root of both sides" move; isolating something
+  trapped inside an existing root starts with "square both sides" — both
+  reuse the same inject → strike → fade → settle animation as the
+  original three move types, by wrapping whatever is CURRENTLY on each
+  side in the same power and letting only the home side's wrapper cancel.
+- BUG CAUGHT DURING DESIGN (before any TS was written): an earlier
+  version mutated a single `side.power` flag in place when squaring/
+  rooting. That broke the moment something else was added to that side
+  in a LATER move (the T = 2π√(L/g) case) — a subsequently-lifted factor
+  ended up incorrectly trapped INSIDE the earlier power wrapper (g got
+  squared along with T instead of sitting outside it). Fixed by making
+  "raised to a power" its own atomic Factor (wrapping a full cloned Side)
+  instead of a mutable side-level flag, so later moves append siblings
+  next to the wrapper rather than merging into it.
+- VERIFIED IN NODE BEFORE ANY UI CODE: every equation × every
+  non-constant variable × 3 random positive-value trials (195 isolations
+  total) — rearranged formula checked against the original equation to a
+  relative error under 1e-9, AND every intermediate step along the
+  derivation independently re-checked to still balance under the same
+  sample values (not just the final answer). 0 failures.
+- 14 new equations under a new "Advanced" tab (Basic keeps the original
+  6): gravitation F=GMm/r², gravitational field strength g=GM/r²,
+  Coulomb's Law F=kq₁q₂/r², kinetic energy Eₖ=½mv², capacitor energy
+  E=½CV², E=mc², pendulum period T=2π√(L/g), free-fall speed v=√(2gh),
+  capacitance C=Q/V, parallel-plate capacitance C=ε₀A/d, P=I²R, P=V²/R,
+  the transformer equation V₁/V₂=N₁/N₂, and Boyle's Law p₁V₁=p₂V₂.
+  Subscripted symbols (q₁, q₂, V₁, N₂, p₁, ...) are literal Unicode
+  subscript characters, typed directly — never \u escapes, per the
+  standing gotcha below. Each equation tagged "IGCSE" or "Beyond IGCSE"
+  (gravitation, field strength, Coulomb, capacitance, and ½CV² marked
+  Beyond IGCSE per the user's explicit list; everything else IGCSE).
+  Physical constants (G, k, ε₀, c, π, ½) render in brass, are never
+  clickable, and travel with the algebra like any other factor.
+- Token rendering is now recursive: a `power`-type factor lays out its
+  own inner numerator/denominator row set, wrapped in √( / ) or ( / )ⁿ
+  bracket tokens, so every symbol inside a radical (even nested two
+  levels deep, as in the pendulum equation) stays individually clickable
+  — clicking L or g directly inside T = 2π√(L/g) on the very first
+  screen is what kicks off its derivation.
+- Seeded 12 practice questions for the Rearranging Equations topic
+  (topic_id 6cb3f4b2, chapter_id 683a1a72 — Prep Physics, previously had
+  zero questions): 4 basic "make X the subject" (difficulty 1, all
+  multiple_choice, distractors are the real mistakes — inverted
+  fraction, wrong operation, forgot the reciprocal), 4 powers/roots
+  (difficulty 2, mix of symbolic multiple_choice and numeric
+  rearrange-then-calculate on P=I²R and v=√(2gh)), 4 Beyond-IGCSE
+  (difficulty 3, Coulomb's Law and ½CV², both directions). Multiple-
+  choice options live in `problem_options` (discovered by inspecting an
+  existing momentum question — separate table, not embedded in
+  question_text); numeric answers are graded with a 2% relative
+  tolerance per the existing submit route, so sample numbers were chosen
+  to resolve to clean values (10, 0.5, 3, 10) rather than long decimals.
+  Verified after insert: all 8 multiple_choice rows have exactly 4
+  options with exactly 1 marked correct; problem_number/order run 1-12
+  (topic had no prior rows).
+- `npm run build` (the real gate, not just tsc) passed clean; scanned
+  the changed file for `\u` escapes per the standing gotcha — none.
