@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { putFileToSignedUrl } from '@/lib/storage/directUpload';
 
 interface Chapter {
   id: string;
@@ -74,16 +75,22 @@ export function BookletManager({
       const chapter = chapters.find((c) => c.id === form.chapter_id);
       const topic = topics.find((t) => t.id === form.topic_id);
       const path = `chapter-${chapter?.chapter_number}${topic ? `/${slug(topic.topic_name)}` : ''}/${slug(form.title || file.name)}.pdf`;
-      const body = new FormData();
-      body.set('file', file);
-      body.set('path', path);
-      const res = await fetch('/api/admin/booklets/upload', { method: 'POST', body });
+      const res = await fetch('/api/admin/booklets/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setError(data.error || 'Upload failed');
         return;
       }
-      setForm((f) => ({ ...f, file_url: data.url, file_size_bytes: data.sizeBytes }));
+      const put = await putFileToSignedUrl(data.signedUrl, file);
+      if (!put.ok) {
+        setError(put.error);
+        return;
+      }
+      setForm((f) => ({ ...f, file_url: data.publicUrl, file_size_bytes: file.size }));
     } catch {
       setError('Network error during upload');
     } finally {

@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (New sim: Vector Addition Sandbox — 9th Prep Physics topic, 6 modes, 12 practice questions)
+Last updated: 2026-09-16 (Fixed "Network error during upload" on bulk/single past-paper and booklet uploads — signed-URL direct-to-storage rewrite)
 
 ---
 
@@ -1559,3 +1559,64 @@ Two distinct visual systems, intentionally:
   typecheck, full build, and the Node-verified math are the available
   substitute; worth a real click-through from a session with browser
   access, particularly the ruler/protractor drag-and-rotate on touch.
+
+### Fixed: "Network error during upload" on past-paper/booklet uploads
+
+- ROOT CAUSE: all three admin upload flows (bulk past-papers, single
+  past-paper, booklets) sent the raw file body straight through our own
+  Vercel serverless function (`req.formData()` in the route handler).
+  Vercel's Node.js serverless functions hard-cap the request body at
+  ~4.5MB, platform-wide — not something `next.config.js`'s
+  `experimental.serverActions.bodySizeLimit` touches, since that setting
+  only governs Server Actions, not Route Handlers. Any real scanned exam
+  PDF (or several batched together in one bulk POST) routinely exceeded
+  that, Vercel returned a non-JSON 413, and the client's `await
+  res.json()` threw — caught by a blanket `catch { setError('Network
+  error during upload') }`, which is exactly the message the user hit
+  ("Choose PDFs" → 6 files ready → "Upload and file them" → "Network
+  error during upload").
+- FIX: switched all three flows to a signed-upload-URL architecture, so
+  file bytes never pass through our function at all — only small JSON
+  does:
+  - `lib/storage/signedUpload.ts` (new, server-only) — mints a
+    short-lived Supabase Storage signed UPLOAD url via
+    `POST /storage/v1/object/upload/sign/{bucket}/{path}` using the
+    service-role key (never leaves the server). Mirrors the existing,
+    already-proven signed READ-url helper in `lib/storage/signed.ts`
+    (same REST contract, write side).
+  - `lib/storage/directUpload.ts` (new, client-safe) — browser PUTs the
+    File directly to that signed URL. Hardcodes Supabase's public
+    "publishable" key (not a secret — same as any anon key shipped in
+    client code; carries no bucket permissions on its own, the embedded
+    signed token is what authorizes the specific write). Done this way
+    because no Vercel env-var write tool is available in this session.
+  - `app/api/admin/past-papers/bulk/route.ts` — rewritten to a two-phase
+    JSON protocol: `action:"prepare"` (metadata only — filename, size,
+    type — returns a matched slot + signed URL per file, or a skip
+    reason), then `action:"confirm"` (writes the resulting public URLs
+    onto `past_papers` rows after the browser has PUT the bytes
+    directly to storage).
+  - `app/api/admin/past-papers/upload/route.ts` and
+    `app/api/admin/booklets/upload/route.ts` — same pattern for the
+    single-file flows: JSON `{path}` in, `{signedUrl, publicUrl}` out.
+  - `components/admin/BulkPaperUpload.tsx`,
+    `components/admin/PastPaperManager.tsx`,
+    `components/admin/BookletManager.tsx` — all three updated to the
+    matching client flow (prepare/confirm JSON round trips + direct PUT
+    to storage). `BookletManager` now reads the uploaded file's size
+    from the local `File` object (`file.size`) instead of a
+    server-echoed value, since the server no longer receives the bytes
+    to measure.
+  - Bulk flow additionally batches at 20 files per server round trip
+    with 4 concurrent uploads within each batch, so a large batch
+    doesn't open dozens of simultaneous storage PUTs or one huge
+    `prepare` payload.
+- VERIFICATION CEILING, disclosed rather than hidden: `npx tsc --noEmit`
+  and `npm run build` are both clean, and the signed-upload REST
+  contract mirrors the already-working signed READ-url pattern
+  elsewhere in this codebase — but the exact Supabase Storage
+  signed-upload contract could NOT be exercised end-to-end from this
+  sandbox, because outbound network access to `*.supabase.co` is
+  blocked by the environment's egress proxy (same standing restriction
+  that blocks browser access to the live site from here). Recommend
+  trying a single file first before running a full batch.

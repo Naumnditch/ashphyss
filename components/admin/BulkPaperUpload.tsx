@@ -2,15 +2,21 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { putFileToSignedUrl } from '@/lib/storage/directUpload';
 
 interface Result {
   matchedCount: number;
   matched: string[];
   skipped: { name: string; reason: string }[];
 }
+type PrepareResult =
+  | { name: string; ok: true; label: string; paperId: string; column: string; signedUrl: string; publicUrl: string }
+  | { name: string; ok: false; reason: string };
 
-/** Uploads in batches so a few hundred files don't arrive as one enormous request. */
+/** Keeps each server round trip (metadata only, never file bytes) small and fast. */
 const BATCH_SIZE = 20;
+/** How many direct-to-storage uploads run at once within a batch. */
+const UPLOAD_CONCURRENCY = 4;
 
 export function BulkPaperUpload() {
   const router = useRouter();
@@ -31,17 +37,63 @@ export function BulkPaperUpload() {
     try {
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
-        const body = new FormData();
-        for (const f of batch) body.append('files', f);
-        const res = await fetch('/api/admin/past-papers/bulk', { method: 'POST', body });
-        const d = await res.json();
-        if (!res.ok || !d.success) {
-          setError(d.error || 'Upload failed partway through');
+        const byName = new Map(batch.map((f) => [f.name, f]));
+
+        // Phase 1: which files match a real slot, plus a signed upload URL
+        // for each — small JSON only, no file bytes cross this call.
+        const prepRes = await fetch('/api/admin/past-papers/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'prepare', files: batch.map((f) => ({ name: f.name, size: f.size, type: f.type })) }),
+        });
+        const prepData = await prepRes.json();
+        if (!prepRes.ok || !prepData.success) {
+          setError(prepData.error || 'Could not prepare this batch');
           break;
         }
-        all.matchedCount += d.matchedCount;
-        all.matched.push(...d.matched);
-        all.skipped.push(...d.skipped);
+        const results: PrepareResult[] = prepData.results;
+
+        // Phase 2: PUT each matched file straight to Supabase Storage —
+        // never through our own function. This is what actually fixes the
+        // size limit. Bounded concurrency so a big batch doesn't open
+        // dozens of uploads simultaneously.
+        const uploaded: { paperId: string; column: string; publicUrl: string; label: string }[] = [];
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < results.length) {
+            const r = results[cursor++];
+            if (!r.ok) {
+              all.skipped.push({ name: r.name, reason: r.reason });
+              continue;
+            }
+            const file = byName.get(r.name);
+            if (!file) continue;
+            const put = await putFileToSignedUrl(r.signedUrl, file);
+            if (!put.ok) {
+              all.skipped.push({ name: r.name, reason: put.error });
+              continue;
+            }
+            uploaded.push({ paperId: r.paperId, column: r.column, publicUrl: r.publicUrl, label: r.label });
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, results.length) }, worker));
+
+        // Phase 3: record the resulting public URLs — small JSON again.
+        if (uploaded.length > 0) {
+          const confirmRes = await fetch('/api/admin/past-papers/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'confirm', updates: uploaded.map(({ paperId, column, publicUrl }) => ({ paperId, column, publicUrl })) }),
+          });
+          const confirmData = await confirmRes.json();
+          if (confirmRes.ok && confirmData.success) {
+            all.matchedCount += confirmData.confirmed;
+            all.matched.push(...uploaded.map((u) => u.label));
+          } else {
+            for (const u of uploaded) all.skipped.push({ name: u.label, reason: 'uploaded, but saving the link failed — try again' });
+          }
+        }
+
         setProgress({ done: Math.min(i + BATCH_SIZE, files.length), total: files.length });
       }
       setResult(all);

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { putFileToSignedUrl } from '@/lib/storage/directUpload';
 
 interface PastPaper {
   id: string;
@@ -55,17 +56,23 @@ export function PastPaperManager({ initialPapers }: { initialPapers: PastPaper[]
     setUploadError(null);
     try {
       const path = `${form.year}-${slug(form.session)}/paper-${form.paper_number}-v${form.variant}-${kind}.pdf`;
-      const body = new FormData();
-      body.set('file', file);
-      body.set('path', path);
-      const res = await fetch('/api/admin/past-papers/upload', { method: 'POST', body });
+      const res = await fetch('/api/admin/past-papers/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setUploadError(data.error || 'Upload failed');
         return;
       }
-      if (kind === 'qp') setForm((f) => ({ ...f, question_paper_url: data.url }));
-      else setForm((f) => ({ ...f, mark_scheme_url: data.url }));
+      const put = await putFileToSignedUrl(data.signedUrl, file);
+      if (!put.ok) {
+        setUploadError(put.error);
+        return;
+      }
+      if (kind === 'qp') setForm((f) => ({ ...f, question_paper_url: data.publicUrl }));
+      else setForm((f) => ({ ...f, mark_scheme_url: data.publicUrl }));
     } catch {
       setUploadError('Network error during upload');
     } finally {
