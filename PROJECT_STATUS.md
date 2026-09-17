@@ -2464,7 +2464,14 @@ duplicating that data, per the explicit instruction this was built to.
     symbol)` with a shared per-symbol default for the (large majority
     of) cases that don't collide, name/unit always taken from that
     equation's own existing `VarInfo` (never re-typed) rather than a
-    second, driftable copy.
+    second, driftable copy. Verified with a small Node script against
+    the real bank (all 20 equations, 68 variable-instances): every
+    single one resolves to an AUTHORED description, zero silently
+    falling through to the generic `"${name}, measured in ${unit}."`
+    fallback — and each unit resolves to a real long-form name (down
+    to the transformer's V₁/V₂ correctly reading "volts" while
+    Boyle's Law's V₁/V₂, same bare symbol, correctly read "cubic
+    metres").
 
   PART 3 — rewired `EquationRearrangerSimulator.tsx`:
   * One `RevealDeck`, one `<section>` per equation IN THE FULL,
