@@ -2307,3 +2307,279 @@ duplicating that data, per the explicit instruction this was built to.
   as every other own-site Shopier checkout attempt this project has
   made), and the soft paywall's 3-click trigger/cooldown timing.
   Worth doing once deployed.
+
+## Equation Rearranger: real reveal.js render/animation layer + glossary (2026-09-17)
+
+- SCOPE, stated plainly up front: this replaced only the RENDER/
+  ANIMATION layer. `isolateSteps`, `buildIntermediate`, the verified
+  Basic/Advanced equation bank, and the layout math that turns a
+  `Side` into positioned tokens (`layoutEquation` and everything under
+  it) are BYTE-IDENTICAL to before — copied into the new
+  `EquationRearrangerSimulator.tsx`, not re-derived, and re-verified
+  against that exact copy (below) rather than trusted on the strength
+  of the old verification alone.
+- The task's reference presentation ("study its `<style>` block from
+  '===== animated equation engine =====' onward, and its
+  `render()`/`mk()`/`openGloss()` logic, which the user has already
+  shown me") was NOT actually present anywhere in this session's
+  context or on disk — checked directly (a filesystem-wide search for
+  its marker strings, and this session's own artifact-shared list,
+  both empty) before writing any code. Rather than guess at a
+  reference I couldn't see, or silently invent one, this was built
+  from the task's own detailed behavioral spec (FLIP-based token
+  movement, cancel-strike, enter/exit, a glossary popup with backdrop/
+  pop-in/edge-flip) — the TECHNIQUE the task asked to reuse, described
+  precisely enough to implement correctly without the source. Noting
+  this plainly rather than implying a port happened that didn't.
+
+  PART 1 — `components/reveal/RevealDeck.tsx` (reusable, not
+  equation-rearranger-specific):
+  * `npm install reveal.js` (6.0.2, real npm package, not a CDN
+    script). Only core (`reveal.js/reveal.css` + a hand-written
+    scoped reset, NOT `reveal.js`'s own `dist/reset.css` — see below)
+    — no plugins, no MathJax; equations are custom HTML/CSS tokens,
+    never typeset math.
+  * `new Reveal(containerElement, opts)` (v6's scoped-instance
+    constructor, not the classic global-singleton `Reveal.initialize()`
+    on a page-wide `.reveal`) with `embedded: true`, `hash: false`,
+    `history: false`, `keyboardCondition: 'focused'`, `controls:
+    false`, `progress: false`, `slideNumber: false`, plus one option
+    beyond the spec's literal list that turned out to be required:
+    `disableLayout: true` — without it reveal.js tries to scale/center
+    the deck as a fixed 960×700 presentation box, which fights a
+    normal responsive page; `disableLayout` is reveal.js's own
+    documented escape hatch for exactly this ("so you can use custom
+    CSS layout"). Container is `tabIndex={0}` so it's focusable.
+  * reveal.js is used PURELY as a navigation/index state machine —
+    which section, which fragment, keyboard/back/next plumbing — and
+    draws none of the visible content. Fragment placeholders
+    (`<span class="fragment">`) are zero-size and stripped of
+    reveal.js's own opacity/transform fragment animation
+    (`reveal-deck-scope.css`); the actual pixels are 100% owned by
+    lib/equation-stage's imperative renderer, which redraws on every
+    fragment-index change. Arrow-key navigation is NOT reveal.js's own
+    key handler (which would fall through to the next SLIDE once
+    fragments run out) — it's the deck's own `onKeyDown`, scoped to
+    the container, calling `nextFragment()`/`prevFragment()`
+    (fragment-only methods that structurally cannot cross a slide
+    boundary), with `stopPropagation()` so nothing outside the deck
+    ever sees an arrow key it fired.
+  * Exposes `next`/`prev`/`goToSlide`/`syncFragments` via
+    `useImperativeHandle` (a ref) plus a `useRevealDeck()` convenience
+    hook pairing that ref with reactive `{slideIndex, fragmentIndex,
+    canNext, canPrev}` state (the last two straight from reveal.js's
+    own `availableFragments()`).
+  * STYLE ISOLATION — checked in the actual COMPILED CSS output, not
+    just the source, since that's what really ships: reveal.js's
+    `dist/reset.css` (bare `html,body,div,h1-h6,p,a,section,...` tag
+    selectors, no class scoping at all) is never imported — importing
+    it would have reset margin/padding/font on every such element
+    site-wide. A small hand-written `reveal-deck-scope.css` scopes an
+    equivalent reset under `.ash-reveal-deck` instead, plus a targeted
+    override for `.reveal-viewport` (a reveal.js-only class name, safe
+    to touch globally since nothing else in this codebase uses it) to
+    stop it assuming it owns the whole page (`height:100%`, opaque
+    background, `overflow:hidden`). Verified post-build: grepped both
+    compiled CSS chunks for any selector not scoped under `.reveal`/
+    `.r-overlay`/`.reveal-viewport` — the only hits were inside
+    reveal.js's own `@media print` block (bare `html`/`body` rules
+    that only affect printing a reveal.js deck, never normal
+    browsing), everything else was correctly `.reveal`-scoped, and the
+    cascade order needed for the scope override to win same-specificity
+    ties against reveal.css (`.ash-reveal-deck .slides` vs `.reveal
+    .slides`, etc.) was confirmed directly in
+    `react-loadable-manifest.json` — reveal.css's chunk is listed
+    BEFORE the scope-override chunk for
+    `EquationRearrangerSimulator.tsx`'s dynamic import, so the browser
+    links them in the right order. Also confirmed this CSS is only
+    ever fetched on `/simulations/equation-rearranger` at all (it's
+    tied to `RevealDeck`'s own dynamic-import chunk per that same
+    manifest) — every other page never loads a byte of it, the
+    strongest isolation guarantee available short of a live click-
+    through.
+  * `RevealDeck` is dynamically imported (`next/dynamic`, `ssr:
+    false`) at its one call site — reveal.js touches `document` and
+    must never evaluate server-side.
+
+  PART 2 — `lib/equation-stage/` (also reusable, but intentionally
+  equation-domain-specific per its own name and the task's explicit
+  node-builder list):
+  * `types.ts` — a generic positioned-token tree (`StageToken`:
+    key/text/x/y/kind, kind one of variable/number/operator/equals/
+    bracket/fractionBar/unit — the task's own "variable/number/
+    operator/unit/fraction/root/power" vocabulary, where fraction/
+    root/power are STRUCTURAL shapes built from those leaf kinds, not
+    separate leaf kinds themselves — exactly how the untouched
+    `layoutFactor`/`layoutSideTokens` already build them: a fraction
+    is a numerator row + a bar + a denominator row, a root/power is a
+    bracket-open + a recursively laid-out inner side + a bracket-close).
+  * `mk.ts` — the tiny typed DOM-builder helper the task asked for.
+  * `render.ts` — `renderStage(container, stage, opts)`: a single,
+    reusable FLIP-diff entry point (not a multi-phase API) that
+    matches existing DOM nodes to `stage.tokens` by `key`, and for
+    each one either FLIPs it (measure the old rect, apply the inverse
+    transform, then transition to the new position — real First-Last-
+    Invert-Play, using `getBoundingClientRect()` before and after),
+    enters it (fade+scale from 0), or exits anything no longer present
+    (fade+scale out, then removed) — plus a strike-through overlay
+    toggled on any key in `cancelKeys`. Text lives in a dedicated
+    `.eq-token-label` child (a real bug caught before it shipped: an
+    earlier version wrote the label straight onto `el.textContent`,
+    which on update would have silently WIPED the glossary glyph and
+    strike-overlay children the same element also holds, since
+    `textContent =` replaces every child).
+  * The 3-phase choreography per move (operate → cancel → settle) —
+    the SAME shape the old StepSnapshot system used — lives in the
+    CALLER (`EquationRearrangerSimulator`'s `playForward`), which
+    calls `renderStage` three times with awaited delays between them,
+    not inside `render()` itself; keeping the engine to one simple
+    "diff to this state" primitive is what makes it reusable for a
+    future sim with a totally different phase shape.
+  * `GlossaryOverlay.tsx` — popup card (symbol, name, unit + long-form
+    unit name, description, a role line distinguishing "the variable
+    you're solving for" from "travels with the algebra to both sides"),
+    positioned from the clicked glyph's `getBoundingClientRect()`,
+    flips above the glyph when it would overflow the viewport bottom
+    and flips its arrow side near the left/right edges, closes on
+    Escape / outside mousedown / window resize. Built with plain
+    Tailwind + a CSS keyframe in `equation-stage.css`, not
+    `styled-jsx` — nothing else in this codebase uses styled-jsx and a
+    first usage wasn't worth introducing for one pop-in animation.
+  * Variable tokens carry TWO independent click targets, never merged:
+    the symbol itself (`clickableVariable`, unchanged solve-for-this
+    behavior) and a small superscript "ⓘ" glyph rendered as a child of
+    the token (`glossarySymbol`, opens the glossary). The glyph's
+    click handler calls `stopPropagation()` so clicking it can never
+    also fire the parent token's solve-for-variable handler — the one
+    interaction bug this pairing could obviously have, closed
+    directly rather than left to be found by clicking around.
+  * Glossary content (`glossary.ts`): one entry per variable symbol —
+    but NOT a flat symbol->text map, because a bare symbol isn't
+    always the same physical quantity across this equation bank. Real
+    collisions found while writing it: V₁/V₂ mean primary/secondary
+    voltage in the transformer equation but initial/final VOLUME in
+    Boyle's Law; V means volume in the density equation but voltage
+    everywhere else; F means three different forces (plain, gravity,
+    electrostatic) across three equations. Keyed by `(equationId,
+    symbol)` with a shared per-symbol default for the (large majority
+    of) cases that don't collide, name/unit always taken from that
+    equation's own existing `VarInfo` (never re-typed) rather than a
+    second, driftable copy.
+
+  PART 3 — rewired `EquationRearrangerSimulator.tsx`:
+  * One `RevealDeck`, one `<section>` per equation IN THE FULL,
+    UNFILTERED bank order (so a section's index in the deck always
+    equals its index in `EQUATIONS`, with no remapping needed when
+    switching Basic/Advanced tabs) — 20 sections total, but only the
+    currently-active one ever carries real fragment placeholders or
+    content; the other 19 are empty shells (`display:none` until
+    `.present`), cheap and simple rather than mounting/unmounting
+    sections on tab or equation switches.
+  * One fragment per `isolateSteps()` move, plus one more when
+    `finalIsLeft` is false (the "flip sides" step) — `totalFragments =
+    moves.length + (finalIsLeft ? 0 : 1)`, checked against the real
+    move lists for the whole bank below. Clicking a variable computes
+    `isolateSteps()` once (unchanged), and an effect registers the new
+    fragment count with the deck via `syncFragments()` and renders the
+    "ready, press Next" (f=-1) state; picking a DIFFERENT variable
+    recreates the fragment placeholders from scratch (fresh DOM nodes,
+    so reveal.js's per-slide fragment-visibility memory is never
+    stale) and resets to f=-1 the same way.
+  * Advancing INTO a move's fragment (`playForward`) plays the same
+    three phases as the old StepSnapshot system, now as one
+    continuous FLIP-animated sequence instead of three separate manual
+    Next presses: inject the unsimplified form (real fraction/term
+    growing on both sides), strike the cancelling pair, settle into
+    `move.stateAfter` — captions update in step (`operateCaption`/
+    `cancelCaption`/'Simplified.', ported verbatim from the logic the
+    old `buildSteps()` used for the same three captions). Back
+    (`snapTo`) jumps straight to the target fragment's already-settled
+    state with `animate: false` — no replay, matching the existing
+    manual-stepping requirement exactly. A monotonic render-generation
+    counter guards every async step (`if (renderGenRef.current !==
+    gen) return`), so a rapid Back press mid-animation can't let a
+    stale `playForward` sequence clobber a newer one.
+  * Next is disabled via `!deck.state.canNext` (reveal.js's own
+    `availableFragments().next`, fragment-scoped) — reveal.js is never
+    given the chance to fall through to the next slide, because
+    nothing here ever calls its slide-level `.next()`/`.prev()`, only
+    the fragment-only methods.
+  * `isDone` and the settled `baseState` (for chaining to a new
+    variable) are set EXPLICITLY at the exact moment each navigation
+    function determines them, not derived from watching
+    `deck.state.fragmentIndex` in a separate effect — an earlier
+    design did that and had a real staleness race (the deck's fragment
+    index updates asynchronously relative to a fresh derivation
+    starting), closed by making both plain state set inline in
+    `playForward`/`snapTo` instead.
+  * `app/simulations/equation-rearranger/page.tsx` needed no changes
+    — it already only imports `{ EquationRearrangerSimulator }` and
+    wraps it in the Part 3 tier gate from the previous task; that gate
+    still applies unchanged.
+
+  PART 4 — STANDING PATTERN, documented here as asked: **use
+  `RevealDeck` (`components/reveal/RevealDeck.tsx`) for future step-
+  by-step simulations** — equation manipulation, worked examples,
+  anything with a genuine stage-1/2/3 sequence a student advances
+  through deliberately. Pair it with a domain-specific stage-tree
+  module under `lib/<domain>-stage/` (following `lib/equation-stage/`'s
+  shape: typed tokens, a `render()` FLIP-diff function, `mk()`) when
+  the content needs positioned, animated tokens; for simpler step
+  content (text/images per step, no token morphing) `RevealDeck` alone
+  is enough — its fragment/section plumbing doesn't require the FLIP
+  renderer. A future prompt asking for this pattern should just say
+  "use RevealDeck."
+  **This explicitly does NOT apply to free-play/sandbox simulations** —
+  anything drag-based, slider-based, or continuously interactive (the
+  Vector Addition Sandbox's 2D Sandbox mode, any of the existing
+  drag-to-explore sims). Forcing those into a slide-deck/fragment
+  structure would fight the format for no benefit; they keep whatever
+  interaction style already fits them (the Vector Addition Sandbox's
+  OWN manually-stepped Methods/Equations panels are the right
+  precedent for when a sim mixes both — reveal.js-style stepping for
+  its worked-example panels, free interaction for its main canvas).
+
+  VERIFICATION:
+  * `npx tsc --noEmit` and `npm run build` both clean (same throwaway
+    local `JWT_SECRET` workaround as every prior build check in this
+    file). `/simulations/equation-rearranger`'s route size grew to
+    14.3 kB (reveal.js + the new engine code), in line with this
+    codebase's other larger simulations (Vector Addition is also
+    14.3 kB).
+  * Re-ran the algebra engine's full verification against a fresh,
+    byte-identical extraction of the ACTUAL new file (not the old
+    one) — every equation × every clickable variable × both starting
+    orientations × every chained pair, through the real
+    `isolateSteps`/`buildIntermediate`/`layoutEquation`, asserting no
+    throw, every cancelKey resolving in the mid-layout, and the final
+    (or chained) answer balancing the original equation to relative
+    error < 1e-9. Extended with the NEW check this task asked for:
+    for every one of those cases, `totalFragments` was checked against
+    `moves.length` (+1 exactly when a flip is needed), and walking
+    every settled state from f=-1 to the last fragment via the same
+    function the UI uses (`stateAtSettledFragment`) was confirmed to
+    reach the identical numeric answer as the already-proven
+    computation path. 4392 checks, 0 failures.
+  * Retraced the three cases that crashed the OLD animation layer
+    (F=GMm/r²→r, F=kq₁q₂/r²→q₂, T=2π√(L/g)→g) through the COMPLETE new
+    pipeline end to end, including the new `toStage` adapter at every
+    move — no throws, every cancelKey present in the adapted stage
+    tokens, all three balance. Fragment counts (3, 4, 4) matched
+    moves.length exactly (q₂'s case includes the flip: 3 moves + 1),
+    which independently cross-checks against this file's own prior
+    entry documenting these same three cases at 9/10/12 steps under
+    the OLD 3-steps-per-move scheme (9=3×3, 10=3×3+1, 12=4×3) — same
+    underlying moves, as expected, since `isolateSteps` never changed.
+  * Scanned every new/changed file for `\u` escapes — none (the
+    Advanced tab's subscripted symbols, √, ², ⁻¹, ⓘ, Σ, − are all
+    typed as literal Unicode characters, per the standing rule).
+  * NOT verified by clicking through a live browser session — this
+    sandbox has no browser access, the standing limitation noted
+    throughout this file. Specifically un-clicked: the actual FLIP
+    motion looking smooth (vs. merely "not throwing"), the glossary
+    popup's edge-flip behavior at real viewport sizes, and touch/
+    keyboard interaction on a real device. Worth a real click-through
+    from a session with browser access, in particular the three
+    former crash cases and at least one square-root derivation
+    (T=2π√(L/g)→g) to watch the multi-move-through-a-radical chain
+    animate correctly.
