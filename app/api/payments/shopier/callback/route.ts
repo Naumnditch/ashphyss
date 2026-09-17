@@ -108,6 +108,17 @@ export async function POST(req: NextRequest) {
         [order.student_id, order.plan_id, order.billing_cycle || 'monthly', months]
       );
     }
+
+    // One-time addon purchase (Part 2 — e.g. 1-on-1 tutoring), reusing this
+    // same shopier_orders row rather than a parallel payment table.
+    if (!order.is_test && !isTest && order.student_id && order.addon_id) {
+      await query(
+        `INSERT INTO addon_purchases (student_id, addon_id, shopier_order_id, price_paid_try, status)
+         VALUES ($1, $2, $3, $4, 'paid')
+         ON CONFLICT (shopier_order_id) DO NOTHING`,
+        [order.student_id, order.addon_id, order.id, order.amount]
+      );
+    }
   } else {
     // No matching row — log it anyway (e.g. a native-storefront sale)
     await query(

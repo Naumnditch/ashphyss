@@ -85,6 +85,36 @@ export default function DashboardPage() {
             Enter Join Code
           </Link>
         </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xl font-semibold mb-1">🎥 Video Solve Requests</h2>
+            <p className="text-gray-600 text-sm">
+              Stuck on a problem? Plus and Pro members can request a personal video walkthrough.
+            </p>
+          </div>
+          <Link
+            href="/video-requests"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded font-medium mt-4 text-center"
+          >
+            Request a Video
+          </Link>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xl font-semibold mb-1">🧑‍🏫 1-on-1 Tutoring</h2>
+            <p className="text-gray-600 text-sm">
+              Book a private tutoring session with a physics teacher — discounted for Pro members.
+            </p>
+          </div>
+          <Link
+            href="/tutoring"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded font-medium mt-4 text-center"
+          >
+            Book a Session
+          </Link>
+        </div>
       </div>
 
       <div className="mt-8 bg-blue-50 p-6 rounded-lg border border-blue-200">

@@ -17,7 +17,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Only protect these route prefixes
-  const protectedPrefixes = ['/teacher', '/admin', '/dashboard', '/account'];
+  const protectedPrefixes = ['/teacher', '/admin', '/dashboard', '/account', '/video-requests', '/tutoring'];
 
   const needsAuth = protectedPrefixes.some((route) => pathname.startsWith(route));
 

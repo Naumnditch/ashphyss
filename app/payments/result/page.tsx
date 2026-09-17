@@ -5,7 +5,12 @@ export const dynamic = 'force-dynamic';
 
 async function getOrder(orderId?: string) {
   if (!orderId) return null;
-  const result = await query(`SELECT * FROM shopier_orders WHERE platform_order_id = $1`, [orderId]);
+  const result = await query(
+    `SELECT o.*, a.name AS addon_name FROM shopier_orders o
+     LEFT JOIN addon_services a ON a.id = o.addon_id
+     WHERE o.platform_order_id = $1`,
+    [orderId]
+  );
   return result.rows[0] || null;
 }
 
@@ -35,6 +40,8 @@ export default async function PaymentResultPage({
           {success
             ? order?.is_test
               ? 'The test charge went through and the signature verified correctly — the integration is working end to end.'
+              : order?.addon_name
+              ? `Your booking for "${order.addon_name}" is confirmed. A teacher will email you to schedule a time.`
               : 'Your subscription is now active. You can head back to your dashboard.'
             : 'The payment was not completed, or the confirmation could not be verified. No charge should apply — check your Shopier panel to confirm.'}
         </p>

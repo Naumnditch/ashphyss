@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { query } from '@/lib/db/client';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { ChapterViewTracker } from '@/components/analytics/ChapterViewTracker';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getUserTier, tierName } from '@/lib/subscriptions/getUserTier';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,7 @@ interface TopicRow {
   id: string;
   topic_name: string;
   order: number;
+  required_tier: number;
 }
 
 interface SimRow {
@@ -42,7 +45,7 @@ async function getChapter(id: string): Promise<ChapterDetail | null> {
 async function getTopics(chapterId: string): Promise<TopicRow[]> {
   try {
     const result = await query(
-      `SELECT id, topic_name, "order" FROM topics WHERE chapter_id = $1 ORDER BY "order" ASC`,
+      `SELECT id, topic_name, "order", required_tier FROM topics WHERE chapter_id = $1 ORDER BY "order" ASC`,
       [chapterId]
     );
     return result.rows;
@@ -93,11 +96,13 @@ export default async function ChapterDetailPage({ params }: { params: { chapterI
   const chapter = await getChapter(params.chapterId);
   if (!chapter) notFound();
 
-  const [topics, simulations, topicsWithPractice, { prev, next }] = await Promise.all([
+  const user = await getCurrentUser();
+  const [topics, simulations, topicsWithPractice, { prev, next }, tier] = await Promise.all([
     getTopics(chapter.id),
     getSimulations(chapter.id),
     getTopicsWithPractice(chapter.id),
     getAdjacentChapters(chapter.chapter_number),
+    user ? getUserTier(user.id) : Promise.resolve(0),
   ]);
 
   // a lesson can have more than one simulation — group, don't overwrite
@@ -134,13 +139,22 @@ export default async function ChapterDetailPage({ params }: { params: { chapterI
             {topics.map((topic) => {
               const sims = simsByTopic.get(topic.id) || [];
               const hasPractice = topicsWithPractice.has(topic.id);
+              const locked = tier < topic.required_tier;
               return (
                 <li
                   key={topic.id}
                   id={`topic-${topic.id}`}
                   className="px-4 py-3 scroll-mt-24 flex items-center justify-between gap-3"
                 >
-                  <span className="text-gray-800">{topic.topic_name}</span>
+                  <span className="text-gray-800 flex items-center gap-2">
+                    {locked && <span title={`Requires ${tierName(topic.required_tier)}`}>🔒</span>}
+                    {topic.topic_name}
+                    {locked && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">
+                        {tierName(topic.required_tier)}
+                      </span>
+                    )}
+                  </span>
                   <span className="flex-shrink-0 flex items-center gap-2">
                     {hasPractice && (
                       <Link

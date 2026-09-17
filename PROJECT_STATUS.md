@@ -2074,3 +2074,227 @@ duplicating that data, per the explicit instruction this was built to.
   limitation noted throughout this file. Worth doing once deployed.
 - NOT PUSHED YET: same branch, same JWT_SECRET confirmation blocking
   the push as the two entries above.
+
+- MONETIZATION PASS: video solve requests, standalone 1-on-1 tutoring,
+  hard tier-gated simulations/lessons, and a soft paywall popup — one
+  spec, four parts plus a shared Part 0 helper. All server-side, all
+  verified against the real database, all typecheck+build clean.
+
+  PART 0 — `lib/subscriptions/getUserTier.ts`: searched the whole
+  codebase first per the spec's own instruction ("search for it
+  rather than re-deriving it") and confirmed there was genuinely no
+  prior self-lookup tier gate to consolidate — every existing
+  `tier_level` reference was either the pricing-page catalog display
+  or an admin granting SOME OTHER user's access
+  (`/api/admin/access`). `getUserTier(userId)` is new code: returns
+  `subscription_plans.tier_level` for the caller's
+  `status = 'active' AND (end_date IS NULL OR end_date > now())`
+  subscription row, defaulting to `TIER_FREE` (0) for no row, an
+  expired one, or a null/undefined id. `TIER_FREE`/`TIER_PLUS`/
+  `TIER_PRO` (0/1/2) and `tierName()` live alongside it. Every gate
+  added in Parts 1-4 calls this — no call site re-queries
+  `subscriptions`/`subscription_plans` on its own.
+
+  PART 1 — Video solve requests (Plus & Pro only):
+  * New table `video_requests` (student_id, chapter_id/topic_id
+    optional, description, screenshot_path, status enum
+    open/in_progress/fulfilled/declined, youtube_url, admin_note).
+  * New PRIVATE Supabase Storage bucket `video-request-screenshots`
+    — created the same way `receipts` was discovered to exist this
+    session: a plain row inserted into `storage.buckets`
+    (`public = false`), no separate bucket-management call needed.
+  * Upload path reuses the existing signed-upload pattern EXACTLY as
+    instructed — `lib/storage/signedUpload.ts`'s
+    `createSignedUploadUrl()` + `lib/storage/directUpload.ts`'s
+    `putFileToSignedUrl()`, the same two functions the booklets/
+    past-papers upload flow uses. No new upload mechanism was
+    invented. `lib/storage/signed.ts`'s old `receipts`-only
+    `signedReceiptUrl()` was generalized into `signedFileUrl(bucket,
+    path, expiresIn)` (kept `signedReceiptUrl` as a one-line wrapper
+    so nothing else had to change) and reused for admin screenshot
+    viewing.
+  * Fulfillment is a YouTube "Unlisted" link only — `youtube_url` is
+    a plain text column validated to look like a youtube.com/youtu.be
+    URL on save; no video file storage of any kind was built.
+  * Per-student open-request cap reads `site_settings` key
+    `max_open_video_requests_per_student` (new row, default `'3'`)
+    through a new `getMaxOpenVideoRequests()` in `lib/settings`
+    rather than a hardcoded number — an admin can change the limit
+    by editing that row directly (no dedicated settings UI for this
+    one value yet, matching how `usd_rate`/bank settings are edited
+    today: direct DB edit, not a form).
+  * `/video-requests` (student): server-side tier check via
+    `getUserTier()` before rendering anything — a Free-tier student
+    hitting the URL directly gets the upsell card, never the form or
+    their own request history. The same check lives independently in
+    both API routes (`POST /api/video-requests`,
+    `POST /api/video-requests/upload`), since the page-level check
+    alone wouldn't stop a direct API call.
+  * `/admin/video-requests`: filterable list, per-request status/
+    YouTube-link/note editor, signed screenshot links.
+
+  PART 2 — 1-on-1 tutoring as a standalone purchase:
+  * Removed "One 1-on-1 private tutoring session per month" from
+    Pro's `subscription_plans.features`; added "Video solve requests
+    for problems you get stuck on" to Plus's features (DB update,
+    not a code change — the pricing page already renders whatever is
+    in that JSONB column).
+  * New tables `addon_services` (one row so far: `tutoring-1on1`,
+    1500 TRY / 999 TRY Pro-discounted) and `addon_purchases`
+    (student_id, addon_id, shopier_order_id, price_paid_try, status
+    pending/paid/scheduled/completed/cancelled, scheduled_at,
+    admin_note). `shopier_orders` gained a nullable `addon_id` FK —
+    reused, not a parallel payment table, exactly as instructed.
+    `addon_purchases.shopier_order_id` is UNIQUE (nullable-safe) so
+    the OSB callback's fulfillment insert is idempotent against a
+    duplicate webhook delivery.
+  * New `POST /api/payments/shopier/addon-checkout` (student-facing,
+    unlike the existing admin-only `/api/payments/shopier/checkout`
+    test portal) builds a `shopier_orders` row with `addon_id` set
+    and `plan_id` null, applies the Pro discount server-side via
+    `getUserTier()`, and returns the same auto-submitting-form field
+    set `buildShopierFormFields()` already produces for subscription
+    test charges. `app/api/payments/shopier/callback/route.ts` (the
+    OSB webhook) gained one more branch: on a verified success with
+    `order.addon_id` set, it inserts into `addon_purchases` with
+    `status = 'paid'` the same way it already activates a
+    subscription when `order.plan_id` is set.
+    CAVEAT (carried over, not new): AshPhys's own-site Shopier
+    checkout (`api_pay4.php`) has the persistent 509 error documented
+    earlier in this file — real subscription purchases go through
+    Shopier's native storefront links instead
+    (`shopier_url_monthly/_quarterly/_yearly`), with the OSB webhook
+    just logging an "unmatched" order and a teacher manually granting
+    access. The new addon checkout is built the exact same way the
+    existing subscription checkout is, so it inherits the same
+    caveat — not a new risk, just an honest note that it may need the
+    same manual-confirmation fallback in practice.
+  * That manual fallback exists for tutoring too:
+    `/admin/tutoring-bookings` has a "record a booking manually" form
+    (mirrors `/admin/access`'s manual subscription grant) alongside
+    the list of bookings, editable status/schedule/note per row.
+  * `/tutoring`: open to every tier (not gated), shows the Pro price
+    struck through the full price when the viewer is Pro, "Book &
+    Pay" button reuses the exact hidden-auto-submit-form pattern
+    `TestPaymentPortal.tsx` established.
+  * Confirmation: reused the existing generic `/payments/result` page
+    (the one Shopier's classic gateway already redirects to — its
+    return URL is a single site-wide setting in Shopier's panel, not
+    passable per-request, so a dedicated new route couldn't actually
+    be reached by Shopier's redirect) rather than building a second,
+    unreachable confirmation page. It now LEFT JOINs `addon_services`
+    and shows tutoring-specific copy when `order.addon_name` is set.
+  * `/pricing` and `/admin` nav updated: a two-card teaser linking to
+    `/video-requests` and `/tutoring` under the pricing cards; both
+    new admin pages added to `AdminNav.tsx`; both linked from the
+    student dashboard.
+
+  PART 3 — Tier-gated simulations and lessons:
+  * `required_tier integer not null default 0` added to `simulations`,
+    `topics`, AND `lessons`.
+    SCOPE DECISION, stated plainly: `lessons` is dead schema — 0 rows,
+    confirmed independently this session and in the prior analytics
+    task; nothing in the app renders it. `topics` is what the UI
+    actually calls a "lesson" (curriculum pages, `/practice/[topicId]`).
+    The spec named `lessons` explicitly, so the column was added there
+    too for literal compliance and in case it's populated later, but
+    the REAL enforcement surface — server-side checks, the admin
+    dropdown, the locked-content UI — is `topics`, not `lessons`.
+    `simulations` is unambiguous and gated the same way regardless.
+  * One-time population (a single UPDATE per table, re-run is a
+    no-op since it's not additive): chapter_number IN (0, 1) — Prep
+    Physics and Making Measurements — stays fully free everywhere.
+    Elsewhere, `simulations`/`lessons` are grouped by `topic_id` and
+    `topics` by `chapter_id`; the lowest-`order` row in each group
+    stays `required_tier = 0`, the rest become `1` (Plus). Verified
+    against the live DB after running it: e.g. chapter 3 (Forces and
+    Motion) landed at 1 free / 5 locked topics, chapters 0-1 landed
+    at 100% free across both topics and simulations — matches the
+    rule exactly.
+  * HARD server-side enforcement, not UI hiding, per the explicit
+    instruction:
+    - All 21 `app/simulations/*/page.tsx` files now fetch
+      `s.required_tier` in their existing per-page context query,
+      compute `getUserTier()` server-side, and conditionally render
+      either the real simulator component or a new
+      `<LockedContent requiredTier title>` component — the simulator
+      component is simply never invoked when the viewer doesn't
+      qualify. (Applied identically across all 21 files via a small
+      one-off Node script since the template was byte-for-byte
+      identical across them; every file was then verified in the
+      typecheck/build pass and via spot-check.)
+    - `GET /api/practice/[topicId]` and
+      `POST /api/practice/[topicId]/submit` both now check the
+      topic's `required_tier` against `getUserTier()` and return 403
+      before touching problem/mastery data — a locked topic's
+      question set is never sent to the browser, not just hidden by
+      the practice UI.
+    - `/practice/[topicId]` (the page) does the same check and
+      renders `<LockedContent>` instead of `<PracticeSession>`.
+    A determined free-tier user hitting any of these URLs directly
+    gets the lock screen and no simulator/question data — verified by
+    reading the rendered output, not just the gate logic.
+  * `LockedContent` (`components/subscriptions/LockedContent.tsx`,
+    server component) is the shared lock screen for both simulations
+    and practice; `/curriculum` and `/curriculum/[chapterId]` now show
+    a 🔒 icon + tier badge next to any locked topic in their listings
+    (still linkable — clicking through lands on the same server-
+    enforced lock screen, so this is a preview affordance, not a
+    bypass).
+  * `/admin/curriculum` gained `CurriculumTierManager` — a tabbed
+    Simulations/Lessons list with a per-row required-tier dropdown
+    (Free/Plus/Pro), calling a new allowlisted
+    `PATCH /api/admin/curriculum/tier` (`table` restricted to a
+    `Set(['simulations','topics','lessons'])`, never interpolated
+    from anywhere else).
+
+  PART 4 — Soft paywall popup:
+  * `lib/paywall/client.ts`: pure browser-storage helper, no server
+    imports (same discipline as `lib/analytics/client.ts` — safe to
+    import into any client component without pulling in `pg`).
+    `sessionStorage` counts locked-content attempts for the current
+    tab session (works for anonymous visitors too — not tied to
+    login); on exactly the 3rd attempt it dispatches a
+    `window` CustomEvent. `localStorage` holds a 24h cooldown
+    timestamp set on dismiss (either "×" or "See plans").
+  * The trigger point is `<LockedContent>` itself — a tiny
+    `LockedContentTracker` client component mounted inside it fires
+    one attempt per render, so viewing ANY locked simulation or
+    practice page (Part 3's enforcement surface) counts as one
+    attempt, consistently, without instrumenting every locked-content
+    entry point separately.
+  * `SoftPaywallModal` is mounted once in `app/layout.tsx`. Eligibility
+    (`tier < TIER_PLUS`) is computed SERVER-SIDE in the root layout via
+    `getCurrentUser()` + `getUserTier()` and passed down as a prop —
+    a logged-in Plus/Pro viewer's client bundle never even attaches the
+    trigger listener. Path exclusion (`/admin`, `/teacher`) is checked
+    client-side via `usePathname()` since that's inherently a client-
+    only API. Logs `paywall_shown` (added to
+    `lib/analytics/track.ts`'s `EVENT_TYPES` allowlist — the track
+    API route silently drops any event type not in that list, so this
+    was required, not optional) when the modal actually opens, and
+    `subscribe_click` with `metadata: { source: 'soft_paywall' }` on
+    the "See plans" click, reusing the existing `analytics_events`
+    table and `trackEvent()` client helper.
+
+  VERIFICATION: `npx tsc --noEmit` clean after every part (checked
+  incrementally, not just once at the end); `npm run build` clean
+  (same throwaway local `JWT_SECRET` workaround as every prior build
+  verification in this file — Vercel's real env var is untouched).
+  Scanned all 55 new/changed files for `\u` escapes — none. Every new
+  migration and every new/changed SQL query was run against the real
+  database via the Supabase MCP tools before being trusted: bucket and
+  `site_settings` rows confirmed post-insert, the Part 3 population
+  UPDATE's per-chapter free/locked counts confirmed against the actual
+  chapter numbers and rule, join queries for the new admin/student API
+  routes confirmed with `EXPLAIN` against the live schema (no
+  production data was mutated by verification — the one exception, an
+  `UPDATE ... WHERE id = (...) AND false`, executes as a real no-op by
+  construction, confirmed via its own `EXPLAIN` output).
+  NOT verified by clicking through a live browser session — this
+  sandbox has no browser access, the standing limitation noted
+  throughout this file. Specifically un-clicked: the Shopier addon
+  checkout redirect end-to-end (blocked on the same known 509 issue
+  as every other own-site Shopier checkout attempt this project has
+  made), and the soft paywall's 3-click trigger/cooldown timing.
+  Worth doing once deployed.

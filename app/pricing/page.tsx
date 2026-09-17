@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { query } from '@/lib/db/client';
 import { getCurrentUser } from '@/lib/auth/session';
-import { getBankSettings, paymentReference, getUsdRate } from '@/lib/settings';
+import { getBankSettings, paymentReference, getUsdRate, tryToUsd } from '@/lib/settings';
 import { PricingCards, type PricingPlan } from '@/components/PricingCards';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +32,27 @@ export default async function PricingPage() {
         </p>
 
         <PricingCards plans={plans} usdRate={usdRate} signedIn={!!user} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white border border-[#e4ddcc] rounded-xl p-5">
+            <h3 className="text-[14px] font-bold text-[#1b2a41] mb-1">🎥 Video solve requests</h3>
+            <p className="text-[12.5px] text-[#4a5a72] leading-snug mb-3">
+              Included free with Plus and Pro — stuck on a problem, get a personal video walkthrough.
+            </p>
+            <Link href="/video-requests" className="text-[12.5px] font-semibold text-[#2e7d6b] underline">
+              Learn more →
+            </Link>
+          </div>
+          <div className="bg-white border border-[#e4ddcc] rounded-xl p-5">
+            <h3 className="text-[14px] font-bold text-[#1b2a41] mb-1">🧑‍🏫 1-on-1 tutoring</h3>
+            <p className="text-[12.5px] text-[#4a5a72] leading-snug mb-3">
+              Book a private session with a teacher — from ${tryToUsd(999, usdRate)} for Pro members.
+            </p>
+            <Link href="/tutoring" className="text-[12.5px] font-semibold text-[#2e7d6b] underline">
+              Book a session →
+            </Link>
+          </div>
+        </div>
 
         {bank.enabled && bank.iban && (
           <div className="bg-white border-2 border-[#2e7d6b] rounded-xl p-6 mb-6">
