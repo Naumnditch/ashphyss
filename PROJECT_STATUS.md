@@ -2291,6 +2291,15 @@ duplicating that data, per the explicit instruction this was built to.
   production data was mutated by verification — the one exception, an
   `UPDATE ... WHERE id = (...) AND false`, executes as a real no-op by
   construction, confirmed via its own `EXPLAIN` output).
+  Also pushed to `ashphyss`'s `claude/charming-ride-usi05g` branch
+  (cherry-picked from `ashphys`, the usual `tsconfig.tsbuildinfo`
+  conflict resolved the usual way) and confirmed the resulting Vercel
+  preview deployment (dpl_ELaMZaaYG2N6GoYxgbdNiKuE3uQN) reached
+  READY with all 93 routes built, including every new one. Did not
+  push to `master` myself — this session's branch instructions are
+  explicit that pushes stay on the feature branch; whatever syncs
+  this branch to `master`/production has, in every prior entry in
+  this file, happened outside this session.
   NOT verified by clicking through a live browser session — this
   sandbox has no browser access, the standing limitation noted
   throughout this file. Specifically un-clicked: the Shopier addon
