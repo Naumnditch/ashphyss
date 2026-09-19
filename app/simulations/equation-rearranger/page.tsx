@@ -3,13 +3,16 @@ import { query } from '@/lib/db/client';
 import { EquationRearrangerSimulator } from '@/components/simulations/EquationRearrangerSimulator';
 
 import { SimulationStartTracker } from '@/components/analytics/SimulationStartTracker';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getUserTier } from '@/lib/subscriptions/getUserTier';
+import { LockedContent } from '@/components/subscriptions/LockedContent';
 
 export const dynamic = 'force-dynamic';
 
 async function getSimContext() {
   try {
     const result = await query(
-      `SELECT s.title, s.description, c.id as chapter_id, c.chapter_number, c.title as chapter_title, t.id as topic_id
+      `SELECT s.title, s.description, s.required_tier, c.id as chapter_id, c.chapter_number, c.title as chapter_title, t.id as topic_id
        FROM simulations s
        JOIN chapters c ON c.id = s.chapter_id
        LEFT JOIN topics t ON t.id = s.topic_id
@@ -24,6 +27,10 @@ async function getSimContext() {
 
 export default async function EquationRearrangerSimulationPage() {
   const ctx = await getSimContext();
+  const user = await getCurrentUser();
+  const tier = user ? await getUserTier(user.id) : 0;
+  const requiredTier = ctx?.required_tier ?? 0;
+  const allowed = tier >= requiredTier;
 
   return (
     <div
@@ -65,7 +72,7 @@ export default async function EquationRearrangerSimulationPage() {
           )}
         </div>
 
-        <EquationRearrangerSimulator />
+        {allowed ? <EquationRearrangerSimulator /> : <LockedContent requiredTier={requiredTier} title={ctx?.title || 'This simulation'} />}
       </div>
     </div>
   );

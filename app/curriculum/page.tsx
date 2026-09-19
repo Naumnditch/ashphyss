@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { query } from '@/lib/db/client';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
+import { getCurrentUser } from '@/lib/auth/session';
+import { getUserTier, tierName } from '@/lib/subscriptions/getUserTier';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,7 @@ interface TopicRow {
   chapter_id: string;
   topic_name: string;
   order: number;
+  required_tier: number;
 }
 
 interface ChapterRow {
@@ -24,7 +27,7 @@ async function getChaptersWithTopics(): Promise<ChapterRow[]> {
       `SELECT id, chapter_number, title FROM chapters WHERE status = 'published' ORDER BY chapter_number ASC`
     );
     const topicsResult = await query(
-      `SELECT id, chapter_id, topic_name, "order" FROM topics ORDER BY chapter_id, "order" ASC`
+      `SELECT id, chapter_id, topic_name, "order", required_tier FROM topics ORDER BY chapter_id, "order" ASC`
     );
     const simsResult = await query(`SELECT topic_id FROM simulations WHERE topic_id IS NOT NULL`);
     const simTopicIds = new Set(simsResult.rows.map((r: any) => r.topic_id));
@@ -42,7 +45,8 @@ async function getChaptersWithTopics(): Promise<ChapterRow[]> {
 }
 
 export default async function CurriculumPage() {
-  const chapters = await getChaptersWithTopics();
+  const user = await getCurrentUser();
+  const [chapters, tier] = await Promise.all([getChaptersWithTopics(), user ? getUserTier(user.id) : Promise.resolve(0)]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -71,21 +75,34 @@ export default async function CurriculumPage() {
             </Link>
             {chapter.topics.length > 0 && (
               <ul className="divide-y divide-gray-100">
-                {chapter.topics.map((topic: any) => (
-                  <li key={topic.id}>
-                    <Link
-                      href={`/curriculum/${chapter.id}#topic-${topic.id}`}
-                      className="flex items-center justify-between px-5 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                    >
-                      <span>{topic.topic_name}</span>
-                      {topic.hasSimulation && (
-                        <span className="text-xs text-blue-600 font-medium flex-shrink-0 ml-2 flex items-center gap-1">
-                          <SimulationIcon className="w-3.5 h-3.5" /> Simulation
+                {chapter.topics.map((topic: any) => {
+                  const locked = tier < topic.required_tier;
+                  return (
+                    <li key={topic.id}>
+                      <Link
+                        href={`/curriculum/${chapter.id}#topic-${topic.id}`}
+                        className="flex items-center justify-between px-5 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {locked && <span title={`Requires ${tierName(topic.required_tier)}`}>🔒</span>}
+                          {topic.topic_name}
                         </span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
+                        <span className="flex items-center gap-2 flex-shrink-0 ml-2">
+                          {locked && (
+                            <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">
+                              {tierName(topic.required_tier)}
+                            </span>
+                          )}
+                          {topic.hasSimulation && (
+                            <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                              <SimulationIcon className="w-3.5 h-3.5" /> Simulation
+                            </span>
+                          )}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

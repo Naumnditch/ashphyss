@@ -1,0 +1,89 @@
+/*
+ * Hand-scoped reset for the reveal.js deck, instead of importing
+ * reveal.js's own dist/reset.css. That file targets bare tags
+ * (html, body, div, h1-h6, p, a, section, ...) with no class scoping at
+ * all — importing it verbatim would reset margin/padding/font on every
+ * element site-wide, not just inside the deck. Everything here is scoped
+ * under .ash-reveal-deck instead.
+ */
+.ash-reveal-deck,
+.ash-reveal-deck *,
+.ash-reveal-deck *::before,
+.ash-reveal-deck *::after {
+  box-sizing: border-box;
+}
+
+.ash-reveal-deck {
+  margin: 0;
+  padding: 0;
+  outline: none;
+  position: relative;
+  width: 100%;
+}
+
+.ash-reveal-deck section,
+.ash-reveal-deck article,
+.ash-reveal-deck header,
+.ash-reveal-deck footer {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.ash-reveal-deck h1,
+.ash-reveal-deck h2,
+.ash-reveal-deck h3,
+.ash-reveal-deck p {
+  margin: 0;
+  padding: 0;
+  font-size: 100%;
+  font: inherit;
+}
+
+/* reveal.js's own reveal.css assumes a full-viewport presentation
+ * (.reveal-viewport height:100%) — with disableLayout:true there's no
+ * forced scale/center transform, but we still give the deck a sane
+ * natural height driven by its content instead of an inherited 0/100%. */
+.ash-reveal-deck .slides {
+  position: relative;
+  width: 100%;
+  height: auto;
+}
+.ash-reveal-deck .slides section {
+  position: relative;
+  width: 100%;
+  height: auto;
+  display: none;
+}
+.ash-reveal-deck .slides section.present {
+  display: block;
+}
+
+/* reveal.js's `.reveal-viewport` class is written assuming it owns the
+ * whole page (height:100%, opaque background, color:#000, overflow:hidden)
+ * — reasonable defaults for a full-page presentation, wrong for a widget
+ * embedded in a normal page. The class name itself is unique to reveal.js
+ * (nothing else in this codebase uses it) so overriding it globally,
+ * rather than needing it nested under .ash-reveal-deck, is safe regardless
+ * of exactly which element embedded mode assigns it to. */
+.reveal-viewport {
+  height: auto !important;
+  position: relative !important;
+  overflow: visible !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* Fragment placeholders are pure bookkeeping for reveal.js's fragment
+ * index/keyboard nav in this codebase's usage — never given visible size
+ * or reveal.js's own opacity/transform fragment animation, since the
+ * equation-stage engine (lib/equation-stage) owns 100% of what's drawn. */
+.ash-reveal-deck .fragment {
+  display: block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  transition: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}

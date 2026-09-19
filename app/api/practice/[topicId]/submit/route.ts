@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getUserTier } from '@/lib/subscriptions/getUserTier';
 import { query } from '@/lib/db/client';
 
 const MASTERY_STREAK = 5;
@@ -19,6 +20,15 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ success: false, error: 'Please log in first' }, { status: 401 });
+  }
+
+  const topicResult = await query(`SELECT required_tier FROM topics WHERE id = $1`, [params.topicId]);
+  if (topicResult.rows.length === 0) {
+    return NextResponse.json({ success: false, error: 'Topic not found' }, { status: 404 });
+  }
+  const tier = await getUserTier(user.id);
+  if (tier < topicResult.rows[0].required_tier) {
+    return NextResponse.json({ success: false, error: 'This lesson requires a higher plan' }, { status: 403 });
   }
 
   const { problemId, submittedAnswer } = await req.json();

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { getUserTier } from '@/lib/subscriptions/getUserTier';
 import { query } from '@/lib/db/client';
 
 export async function GET(req: NextRequest, { params }: { params: { topicId: string } }) {
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
   }
 
   const topicResult = await query(
-    `SELECT t.id, t.topic_name, c.id as chapter_id, c.chapter_number, c.title as chapter_title
+    `SELECT t.id, t.topic_name, t.required_tier, c.id as chapter_id, c.chapter_number, c.title as chapter_title
      FROM topics t JOIN chapters c ON c.id = t.chapter_id
      WHERE t.id = $1`,
     [params.topicId]
@@ -24,6 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
     return NextResponse.json({ success: false, error: 'Topic not found' }, { status: 404 });
   }
   const topic = topicResult.rows[0];
+
+  const tier = await getUserTier(user.id);
+  if (tier < topic.required_tier) {
+    return NextResponse.json({ success: false, error: 'This lesson requires a higher plan', locked: true, requiredTier: topic.required_tier }, { status: 403 });
+  }
 
   const problemsResult = await query(
     `SELECT id, question_text, question_image_url, answer_type, explanation, difficulty_level, "order"

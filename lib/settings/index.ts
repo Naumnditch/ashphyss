@@ -11,6 +11,13 @@ export async function getUsdRate(): Promise<number> {
   return Number.isFinite(v) && v > 0 ? v : 47.18;
 }
 
+/** Per-student cap on simultaneously open video solve requests (Part 1). */
+export async function getMaxOpenVideoRequests(): Promise<number> {
+  const res = await query(`SELECT value FROM site_settings WHERE key = 'max_open_video_requests_per_student'`);
+  const v = parseInt(res.rows[0]?.value ?? '', 10);
+  return Number.isFinite(v) && v > 0 ? v : 3;
+}
+
 export interface BankSettings {
   enabled: boolean;
   accountName: string;

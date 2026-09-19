@@ -174,6 +174,88 @@ function AngleArc({ center, fromDeg, toDeg, radius, color = MUTE, showLabel = tr
   );
 }
 
+/**
+ * A vector's floating "label (mag, angle)" readout, anchored at the
+ * vector's own midpoint and offset perpendicular to it so the text reads
+ * as belonging to that line rather than floating independently. The
+ * offset side is chosen to point away from `awayFromPx` (the centroid of
+ * everything on screen) so labels land outside the shape the vectors
+ * form instead of stacking in the middle. Short vectors push the anchor
+ * past the arrowhead instead of using a midpoint that would collide with
+ * it, so a label is never hidden. Text never rotates with the vector.
+ */
+function VectorLabel({
+  tailPx,
+  tipPx,
+  text,
+  color,
+  awayFromPx,
+  fontSize = 13.5,
+}: {
+  tailPx: Vec2;
+  tipPx: Vec2;
+  text: string;
+  color: string;
+  awayFromPx: Vec2;
+  fontSize?: number;
+}) {
+  const dx = tipPx.x - tailPx.x;
+  const dy = tipPx.y - tailPx.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return null;
+  const ux = dx / len;
+  const uy = dy / len;
+
+  // Below this on-screen length the midpoint sits too close to the
+  // arrowhead (max 14px long) and its drag handle — anchor just past the
+  // tip instead so the label clears both and is never hidden.
+  const MIN_LEN_FOR_MIDPOINT = 50;
+  const PUSH_PAST_TIP = 20;
+  const anchor =
+    len < MIN_LEN_FOR_MIDPOINT
+      ? { x: tipPx.x + ux * PUSH_PAST_TIP, y: tipPx.y + uy * PUSH_PAST_TIP }
+      : { x: (tailPx.x + tipPx.x) / 2, y: (tailPx.y + tipPx.y) / 2 };
+
+  let perpX = -uy;
+  let perpY = ux;
+  const towardX = anchor.x - awayFromPx.x;
+  const towardY = anchor.y - awayFromPx.y;
+  if (perpX * towardX + perpY * towardY < 0) {
+    perpX = -perpX;
+    perpY = -perpY;
+  }
+
+  const GAP = 14;
+  const lx = anchor.x + perpX * GAP;
+  const ly = anchor.y + perpY * GAP;
+
+  // No DOM measurement available at render time, so the halo rect is
+  // sized from an estimated character width for this font — comfortably
+  // covers the text without needing a layout pass.
+  const haloW = text.length * fontSize * 0.56 + 8;
+  const haloH = fontSize * 1.4;
+
+  return (
+    <g style={{ transition: 'all 300ms ease' }}>
+      <rect x={lx - haloW / 2} y={ly - haloH / 2} width={haloW} height={haloH} rx={5} fill={PAPER} opacity={0.82} />
+      <text
+        x={lx}
+        y={ly}
+        fontSize={fontSize}
+        fontFamily="Georgia, serif"
+        fontStyle="italic"
+        fontWeight={700}
+        fill={color}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        style={{ paintOrder: 'stroke', stroke: PAPER, strokeWidth: 3 }}
+      >
+        {text}
+      </text>
+    </g>
+  );
+}
+
 function GridAndAxes({ viewW, viewH, origin, pxPerUnit, showGrid }: { viewW: number; viewH: number; origin: Vec2; pxPerUnit: number; showGrid: boolean }) {
   const unitsLeft = Math.ceil(origin.x / pxPerUnit);
   const unitsRight = Math.ceil((viewW - origin.x) / pxPerUnit);
@@ -529,6 +611,20 @@ function Mode2DSandbox() {
   const resultantVec: Vec2 = sum(vecs.map((v) => ({ x: v.vx, y: v.vy })));
   const resultantPolar = toPolar(resultantVec);
 
+  // Reference point every label's perpendicular offset points away from,
+  // so labels land outside the shape the vectors form instead of toward
+  // its middle (where the other vectors/shafts are) — recomputed every
+  // render, so it tracks a vector live while it's being dragged.
+  const labelRefPoints: Vec2[] = [
+    ...vecs.flatMap((v) => [toScreen(v.tail), toScreen(add(v.tail, { x: v.vx, y: v.vy }))]),
+    toScreen({ x: 0, y: 0 }),
+    toScreen(resultantVec),
+  ];
+  const labelCentroid: Vec2 = {
+    x: labelRefPoints.reduce((s, p) => s + p.x, 0) / labelRefPoints.length,
+    y: labelRefPoints.reduce((s, p) => s + p.y, 0) / labelRefPoints.length,
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div className={cardCls}>
@@ -599,19 +695,13 @@ function Mode2DSandbox() {
                 <g key={v.id}>
                   {showAngles && <AngleArc center={tailPx} fromDeg={0} toDeg={theta} radius={Math.min(46, 22 + magnitude({ x: v.vx, y: v.vy }) * pxPerUnit * 0.18)} color={v.color} />}
                   <Arrow tail={tailPx} tip={tipPx} color={v.color} />
-                  <text
-                    x={tailPx.x + (tipPx.x - tailPx.x) * 0.5 - 14}
-                    y={tailPx.y + (tipPx.y - tailPx.y) * 0.5 - 10}
-                    fontSize={13.5}
-                    fontFamily="Georgia, serif"
-                    fontStyle="italic"
-                    fontWeight={700}
-                    fill={v.color}
-                    style={{ paintOrder: 'stroke', stroke: PAPER, strokeWidth: 3 }}
-                  >
-                    {v.label}
-                    {showValues ? ` (${fmtMag(magnitude({ x: v.vx, y: v.vy }))}, ${fmtAngle(theta)}°)` : ''}
-                  </text>
+                  <VectorLabel
+                    tailPx={tailPx}
+                    tipPx={tipPx}
+                    color={v.color}
+                    awayFromPx={labelCentroid}
+                    text={`${v.label}${showValues ? ` (${fmtMag(magnitude({ x: v.vx, y: v.vy }))}, ${fmtAngle(theta)}°)` : ''}`}
+                  />
                   <DragHandle p={tailPx} onDown={onHandleDown(v.id, 'tail')} fill={PAPER} stroke={v.color} r={7} />
                   <DragHandle p={tipPx} onDown={onHandleDown(v.id, 'tip')} fill={v.color} stroke={INK} />
                 </g>
@@ -622,18 +712,13 @@ function Mode2DSandbox() {
               <g>
                 {showAngles && <AngleArc center={toScreen({ x: 0, y: 0 })} fromDeg={0} toDeg={resultantPolar.theta} radius={54} color={RESULTANT_COLOR} />}
                 <Arrow tail={toScreen({ x: 0, y: 0 })} tip={toScreen(resultantVec)} color={RESULTANT_COLOR} width={5} />
-                <text
-                  x={toScreen(resultantVec).x + 10}
-                  y={toScreen(resultantVec).y - 6}
-                  fontSize={14.5}
-                  fontFamily="Georgia, serif"
-                  fontStyle="italic"
-                  fontWeight={700}
-                  fill={RESULTANT_COLOR}
-                  style={{ paintOrder: 'stroke', stroke: PAPER, strokeWidth: 3 }}
-                >
-                  R
-                </text>
+                <VectorLabel
+                  tailPx={toScreen({ x: 0, y: 0 })}
+                  tipPx={toScreen(resultantVec)}
+                  color={RESULTANT_COLOR}
+                  awayFromPx={labelCentroid}
+                  text={`R${showValues ? ` (${fmtMag(resultantPolar.r)}, ${fmtAngle(resultantPolar.theta)}°)` : ''}`}
+                />
               </g>
             )}
           </svg>

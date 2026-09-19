@@ -13,6 +13,8 @@ const ADMIN_NAV = [
   { href: '/admin/past-papers', label: 'Past Papers' },
   { href: '/admin/booklets', label: 'Booklets' },
   { href: '/admin/courses', label: 'Engineering Courses' },
+  { href: '/admin/video-requests', label: 'Video Requests' },
+  { href: '/admin/tutoring-bookings', label: 'Tutoring Bookings' },
   { href: '/admin/payment-requests', label: 'Payment Receipts' },
   { href: '/admin/access', label: 'Subscriber Access' },
   { href: '/admin/settings', label: 'Payment Settings' },

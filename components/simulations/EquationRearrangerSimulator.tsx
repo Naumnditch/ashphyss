@@ -1,20 +1,35 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import type { RevealDeckState } from '@/components/reveal/RevealDeck';
+import { useRevealDeck } from '@/components/reveal/useRevealDeck';
+import { renderStage } from '@/lib/equation-stage/render';
+import type { Stage, StageToken } from '@/lib/equation-stage/types';
+import { getGlossaryEntry } from '@/lib/equation-stage/glossary';
+import { GlossaryOverlay, type GlossaryEntry } from '@/components/equation-stage/GlossaryOverlay';
+
+// reveal.js touches `document` at mount time and must never evaluate
+// server-side — see components/reveal/RevealDeck.tsx.
+const RevealDeck = dynamic(() => import('@/components/reveal/RevealDeck').then((m) => m.RevealDeck), { ssr: false });
 
 /**
  * Equation Rearranger — the operation forms directly inside the equation,
- * one manually-advanced step at a time.
- *
- * Not a floating annotation: clicking a variable prepares the full move
- * list but plays nothing automatically. Each move is three Next presses —
- * apply the operation (a real, unsimplified fraction/term fades in on both
- * sides at once, e.g. F = m×a dividing by m becomes F/m = (m×a)/m),
- * highlight the cancelling pair, then settle into the simplified result —
- * plus one final flip step if the answer needs mirroring onto the left.
- * Back steps to the previous snapshot instantly, no replayed animation.
- * A second click (once the current derivation is fully done) chains from
- * what's on screen; Reset returns to the original equation.
+ * one manually-advanced step at a time, now driven by a real reveal.js
+ * deck (components/reveal/RevealDeck.tsx) instead of a hand-rolled
+ * StepSnapshot/CSS-transition state machine. Each equation in the bank is
+ * one reveal.js section; each move isolateSteps() returns for the
+ * currently-chosen target variable is one fragment within that section.
+ * Advancing INTO a fragment plays the same three-phase choreography as
+ * before — a real, unsimplified fraction/term fades in on both sides at
+ * once (e.g. F = m×a dividing by m becomes F/m = (m×a)/m), the
+ * cancelling pair strikes through, then it settles into the simplified
+ * result — now as one continuous FLIP-animated sequence (lib/equation-
+ * stage/render.ts) triggered by a single Next press, rather than three
+ * separate manual steps. Back jumps straight to the previous fragment's
+ * settled state, no replay. A second click (once the current derivation
+ * is fully done) chains from what's on screen; Reset returns to the
+ * original equation.
  *
  * Two tabs: Basic (the original six linear equations) and Advanced
  * (fourteen more, several with squared terms or a square root — gravity,
@@ -26,14 +41,15 @@ import { useEffect, useRef, useState } from 'react';
  * T = 2π√(L/g)). Isolating a squared factor ends with a "take the square
  * root of both sides" move; isolating something trapped inside an
  * existing root starts with a "square both sides" move to peel it off —
- * both reuse the same inject → cancel → settle step shape as every other
+ * both reuse the same operate → cancel → settle animation as every other
  * move, just wrapping a whole side instead of matching a single symbol.
  * A single-term side can also carry a leftover negative sign after
  * chaining through an earlier additive move (v=u+at: solve u, then a) —
  * one more "×(−1) both sides" move flips it, since isolated must mean the
  * bare positive variable, not "−a". Physical constants (G, k, ε₀, c, π, ½)
  * are real factors that travel with the algebra but are never clickable
- * targets.
+ * targets, and never get a glossary glyph (they're not in any equation's
+ * `vars` list, which is the glossary's only source of entries).
  *
  * Every equation × every clickable variable × both starting orientations
  * (the equation as given, and mirrored) × every chained pair (solve X,
@@ -43,18 +59,14 @@ import { useEffect, useRef, useState } from 'react';
  * executed directly — asserting no throw, every cancel key resolving to a
  * real token in the intermediate layout, and the final (or chained) answer
  * checked against the original equation to a relative error under 1e-9
- * (3090 checks, 0 failures). That full-pipeline pass is what caught two
- * real bugs a plain algebra-only check had missed: a move.symbol/factorTag
- * mismatch that crashed on any ×/÷ move touching a powered or
- * power-wrapped factor, and the leftover-negative-sign case above.
+ * (3090 checks, 0 failures). None of that — isolateSteps, buildIntermediate,
+ * the equation bank, or the layout math that turns a Side into positioned
+ * tokens — changed for the reveal.js rewrite below; only what CONSUMES
+ * layoutEquation()'s Token[] output changed, from React JSX with CSS
+ * transitions to lib/equation-stage's imperative FLIP renderer.
  */
 
-const INK = '#1b2a41';
-const MUTE = '#4a5a72';
-const BRASS = '#b8823d';
-const RED = '#b34a3c';
-
-// ---------- algebra engine ----------
+// ---------- algebra engine (unchanged) ----------
 
 interface VarFactor {
   kind: 'var';
@@ -408,7 +420,7 @@ function keysForFactorAt(tag: string, role: 'n' | 'd', side: 'L' | 'R', index: n
   return factor.kind === 'power' ? [`${base}-open`, `${base}-close`] : [base];
 }
 
-// ---------- equation bank ----------
+// ---------- equation bank (unchanged) ----------
 
 interface VarInfo {
   symbol: string;
@@ -706,7 +718,7 @@ const EQUATIONS: EquationDef[] = [
   },
 ];
 
-// ---------- layout ----------
+// ---------- layout (unchanged) ----------
 
 const CELL_W = 46;
 const OP_W = 30;
@@ -824,74 +836,36 @@ function layoutEquation(state: EqState): { tokens: Token[]; totalWidth: number; 
   };
 }
 
-type Tab = 'basic' | 'advanced';
-type StepKind = 'operate' | 'cancel' | 'settle' | 'flip';
+// ---------- equation-stage adapter (new) ----------
 
-interface StepSnapshot {
-  displayState: EqState;
-  subStage: 'inject' | 'strike' | null;
-  cancelKeys: string[];
-  injectedKeys: string[];
-  caption: string;
-  moveIndex: number; // which move (0-based) this belongs to; moves.length for the flip step
-  stepKind: StepKind;
-}
+const STAGE_HEIGHT = 130;
+const STAGE_Y_OFFSET = 55;
 
-/**
- * Turns a move list into a flat sequence of manually-advanced snapshots:
- * every move becomes three steps (apply the operation unsimplified →
- * highlight the cancelling pair → settle into the simplified result), and
- * an unbalanced derivation gets one final flip step. Each snapshot is a
- * complete, independent render state — Back/Next just move an index into
- * this array, no timers or replay involved.
- */
-function buildSteps(moves: Move[], finalIsLeft: boolean, startState: EqState): StepSnapshot[] {
-  const steps: StepSnapshot[] = [];
-  let before = startState;
-
-  moves.forEach((move, mi) => {
-    const { mid, cancelKeys } = buildIntermediate(move, before);
-    const beforeKeys = new Set(layoutEquation(before).tokens.map((t) => t.key));
-    const midKeys = layoutEquation(mid).tokens.map((t) => t.key);
-    const injectedKeys = midKeys.filter((k) => !beforeKeys.has(k));
-
-    const isPower = move.kind === 'root' || move.kind === 'square';
-    const isNegate = move.kind === 'negate';
-    const operateCaption = isNegate
-      ? 'Multiply both sides by −1'
-      : isPower
-      ? move.kind === 'root'
-        ? `Take the ${move.degree === 2 ? 'square' : `${move.degree}th`} root of both sides`
-        : 'Square both sides'
-      : `Apply ${move.opLabel} to both sides`;
-    const cancelCaption = isNegate
-      ? 'The sign flips on both sides'
-      : isPower
-      ? move.kind === 'root'
-        ? `${move.symbol}${supNum(move.degree ?? 2)} simplifies to ${move.symbol}`
-        : 'The root cancels here'
-      : `${move.symbol} cancels here`;
-
-    steps.push({ displayState: mid, subStage: 'inject', cancelKeys, injectedKeys, caption: operateCaption, moveIndex: mi, stepKind: 'operate' });
-    steps.push({ displayState: mid, subStage: 'strike', cancelKeys, injectedKeys: [], caption: cancelCaption, moveIndex: mi, stepKind: 'cancel' });
-    steps.push({ displayState: move.stateAfter, subStage: null, cancelKeys: [], injectedKeys: [], caption: 'Simplified.', moveIndex: mi, stepKind: 'settle' });
-    before = move.stateAfter;
+/** Converts layoutEquation()'s Token[] (unchanged algebra-engine output) into lib/equation-stage's Stage tree. */
+function toStage(state: EqState, target: string | null, clickable: boolean): Stage {
+  const layout = layoutEquation(state);
+  const tokens: StageToken[] = layout.tokens.map((t): StageToken => {
+    if (t.kind === 'bar') {
+      return { key: t.key, text: '', x: t.x, y: STAGE_Y_OFFSET + t.y, kind: 'fractionBar' };
+    }
+    const kind: StageToken['kind'] =
+      t.kind === 'var' ? 'variable' : t.kind === 'const' ? 'number' : t.kind === 'op' ? 'operator' : t.kind === 'equals' ? 'equals' : 'bracket';
+    const isVar = t.kind === 'var';
+    return {
+      key: t.key,
+      text: t.text,
+      x: t.x,
+      y: STAGE_Y_OFFSET + t.y,
+      kind,
+      isTarget: isVar && t.targetSymbol === target,
+      clickableVariable: isVar && clickable ? t.targetSymbol : undefined,
+      glossarySymbol: isVar ? t.targetSymbol : undefined,
+    };
   });
-
-  if (!finalIsLeft) {
-    steps.push({
-      displayState: mirror(before),
-      subStage: null,
-      cancelKeys: [],
-      injectedKeys: [],
-      caption: 'Flipped so the answer sits on the left.',
-      moveIndex: moves.length,
-      stepKind: 'flip',
-    });
-  }
-
-  return steps;
+  return { tokens, width: layout.totalWidth, height: STAGE_HEIGHT };
 }
+
+type Tab = 'basic' | 'advanced';
 
 function moveStepLabel(move: Move): string {
   if (move.kind === 'root') return move.degree === 2 ? '√ both sides' : `^(1/${move.degree}) both sides`;
@@ -899,6 +873,53 @@ function moveStepLabel(move: Move): string {
   if (move.kind === 'negate') return '×(−1) both sides';
   return move.opLabel;
 }
+
+function operateCaption(move: Move): string {
+  const isPower = move.kind === 'root' || move.kind === 'square';
+  const isNegate = move.kind === 'negate';
+  return isNegate
+    ? 'Multiply both sides by −1'
+    : isPower
+    ? move.kind === 'root'
+      ? `Take the ${move.degree === 2 ? 'square' : `${move.degree}th`} root of both sides`
+      : 'Square both sides'
+    : `Apply ${move.opLabel} to both sides`;
+}
+function cancelCaption(move: Move): string {
+  const isPower = move.kind === 'root' || move.kind === 'square';
+  const isNegate = move.kind === 'negate';
+  return isNegate
+    ? 'The sign flips on both sides'
+    : isPower
+    ? move.kind === 'root'
+      ? `${move.symbol}${supNum(move.degree ?? 2)} simplifies to ${move.symbol}`
+      : 'The root cancels here'
+    : `${move.symbol} cancels here`;
+}
+
+function stateAtSettledFragment(f: number, moves: Move[], finalIsLeft: boolean, baseState: EqState): EqState {
+  if (f < 0) return baseState;
+  if (f < moves.length) return moves[f].stateAfter;
+  const last = moves.length > 0 ? moves[moves.length - 1].stateAfter : baseState;
+  return finalIsLeft ? last : mirror(last);
+}
+
+function settledCaptionFor(f: number, moves: Move[], finalIsLeft: boolean, target: string): string {
+  const total = moves.length + (finalIsLeft ? 0 : 1);
+  if (f < 0) {
+    return total === 0 ? `${target} is already alone` : `Solve for ${target} — ${total} step${total === 1 ? '' : 's'}. Press Next.`;
+  }
+  if (f === moves.length && !finalIsLeft) return 'Flipped so the answer sits on the left.';
+  return 'Simplified.';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const OPERATE_MS = 650;
+const CANCEL_MS = 500;
+const SETTLE_MS = 650;
 
 export function EquationRearrangerSimulator() {
   const [tab, setTab] = useState<Tab>('basic');
@@ -908,103 +929,202 @@ export function EquationRearrangerSimulator() {
   const [baseState, setBaseState] = useState<EqState>(EQUATIONS[0].initial);
   const [moves, setMoves] = useState<Move[]>([]);
   const [finalIsLeft, setFinalIsLeft] = useState(true);
-  const [steps, setSteps] = useState<StepSnapshot[]>([]);
-  const [stepIndex, setStepIndex] = useState(-1); // -1 = prepared, not yet started
-  const [injectStarted, setInjectStarted] = useState(true);
-  const [transitioning, setTransitioning] = useState(false);
   const [sampleVals, setSampleVals] = useState<Record<string, number>>(EQUATIONS[0].sample);
+  const [caption, setCaption] = useState('Click any variable to isolate it');
+  const [isDone, setIsDone] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [glossary, setGlossary] = useState<{ entry: GlossaryEntry; anchorEl: HTMLElement; isTarget: boolean } | null>(null);
 
-  const directionRef = useRef<'forward' | 'back'>('forward');
   const eq = EQUATIONS[eqIdx];
-  const isDone = target !== null && stepIndex === steps.length - 1;
+  const totalFragments = moves.length + (finalIsLeft ? 0 : 1);
 
-  // Fade newly-injected tokens in on forward advance into an 'inject' step;
-  // jump straight to fully-visible on Back (no replayed animation).
-  useEffect(() => {
-    if (stepIndex < 0 || stepIndex >= steps.length) {
-      setInjectStarted(true);
-      return;
-    }
-    const step = steps[stepIndex];
-    if (step.subStage === 'inject' && directionRef.current === 'forward') {
-      setInjectStarted(false);
-      setTransitioning(true);
-      let raf2 = 0;
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => {
-          setInjectStarted(true);
-          setTransitioning(false);
-        });
+  const stageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const prevFragmentRef = useRef(-1);
+  const renderGenRef = useRef(0);
+  const deck = useRevealDeck();
+
+  const openGlossary = useCallback(
+    (symbol: string, anchorEl: HTMLElement) => {
+      const varInfo = EQUATIONS[eqIdx].vars.find((v) => v.symbol === symbol);
+      if (!varInfo) return;
+      const entry = getGlossaryEntry(EQUATIONS[eqIdx].id, symbol, varInfo.name, varInfo.unit);
+      setGlossary({ entry, anchorEl, isTarget: symbol === target });
+    },
+    [eqIdx, target]
+  );
+
+  const solveFor = useCallback(
+    (symbol: string) => {
+      setBaseState((currentBase) => {
+        const { moves: newMoves, finalIsLeft: newFinalIsLeft } = isolateSteps(currentBase, symbol);
+        setMoves(newMoves);
+        setFinalIsLeft(newFinalIsLeft);
+        setTarget(symbol);
+        return currentBase;
       });
-      return () => {
-        cancelAnimationFrame(raf1);
-        cancelAnimationFrame(raf2);
-      };
-    }
-    setInjectStarted(true);
-    setTransitioning(false);
-  }, [stepIndex, steps]);
+    },
+    []
+  );
 
-  // Commit the settled/flipped equation as the new base once a derivation
-  // reaches its last step, so chaining ("click another variable now")
-  // continues from what's actually on screen.
+  // Idle render: no target picked yet for the active equation.
   useEffect(() => {
-    if (target !== null && stepIndex === steps.length - 1) {
-      const finalDisplay = steps.length > 0 ? steps[stepIndex].displayState : baseState;
-      setBaseState(finalDisplay);
-    }
+    if (target !== null) return;
+    const stageEl = stageRefs.current[eqIdx];
+    if (!stageEl) return;
+    ++renderGenRef.current;
+    renderStage(stageEl, toStage(eq.initial, null, true), {
+      animate: false,
+      cancelKeys: new Set(),
+      onVariableClick: solveFor,
+      onGlossaryClick: openGlossary,
+    });
+    setCaption('Click any variable to isolate it');
+    setIsDone(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, stepIndex, steps]);
+  }, [target, eqIdx]);
 
-  const goNext = () => {
-    if (transitioning || stepIndex >= steps.length - 1) return;
-    directionRef.current = 'forward';
-    setStepIndex((i) => i + 1);
-  };
-  const goBack = () => {
-    if (transitioning || stepIndex <= -1) return;
-    directionRef.current = 'back';
-    setStepIndex((i) => i - 1);
-  };
-
+  // A new derivation was just prepared for the active equation: register its
+  // fragment count with the deck and render the "ready" (f = -1) state.
   useEffect(() => {
     if (target === null) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') goNext();
-      else if (e.key === 'ArrowLeft') goBack();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const stageEl = stageRefs.current[eqIdx];
+    if (!stageEl) return;
+    prevFragmentRef.current = -1;
+    ++renderGenRef.current;
+    deck.syncFragments(eqIdx);
+    const total = moves.length + (finalIsLeft ? 0 : 1);
+    const doneImmediately = total === 0;
+    renderStage(stageEl, toStage(baseState, target, doneImmediately), {
+      animate: false,
+      cancelKeys: new Set(),
+      onVariableClick: solveFor,
+      onGlossaryClick: openGlossary,
+    });
+    setCaption(settledCaptionFor(-1, moves, finalIsLeft, target));
+    setIsDone(doneImmediately);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, stepIndex, steps, transitioning]);
+  }, [target, moves]);
 
-  const solveFor = (symbol: string) => {
-    const { moves: newMoves, finalIsLeft: newFinalIsLeft } = isolateSteps(baseState, symbol);
-    const newSteps = buildSteps(newMoves, newFinalIsLeft, baseState);
-    setMoves(newMoves);
-    setFinalIsLeft(newFinalIsLeft);
-    setSteps(newSteps);
-    setStepIndex(-1);
-    directionRef.current = 'forward';
-    setTarget(symbol);
-  };
+  const snapTo = useCallback(
+    (f: number) => {
+      const gen = ++renderGenRef.current;
+      const stageEl = stageRefs.current[eqIdx];
+      if (!stageEl) return;
+      const total = moves.length + (finalIsLeft ? 0 : 1);
+      const doneHere = f === total - 1;
+      const state = stateAtSettledFragment(f, moves, finalIsLeft, baseState);
+      renderStage(stageEl, toStage(state, target, doneHere), {
+        animate: false,
+        cancelKeys: new Set(),
+        onVariableClick: solveFor,
+        onGlossaryClick: openGlossary,
+      });
+      if (renderGenRef.current !== gen) return;
+      setCaption(target ? settledCaptionFor(f, moves, finalIsLeft, target) : 'Click any variable to isolate it');
+      setIsDone(doneHere);
+      if (doneHere) setBaseState(state);
+    },
+    [eqIdx, moves, finalIsLeft, baseState, target, solveFor, openGlossary]
+  );
+
+  const playForward = useCallback(
+    async (f: number) => {
+      const gen = ++renderGenRef.current;
+      const stageEl = stageRefs.current[eqIdx];
+      if (!stageEl || !target) return;
+      const total = moves.length + (finalIsLeft ? 0 : 1);
+
+      if (f === moves.length && !finalIsLeft) {
+        // Flip fragment — mirrors the settled equation so the answer sits on the left. Always the last fragment.
+        setIsAnimating(true);
+        const last = moves.length > 0 ? moves[moves.length - 1].stateAfter : baseState;
+        const flipped = mirror(last);
+        setCaption('Flipped so the answer sits on the left.');
+        renderStage(stageEl, toStage(flipped, target, true), {
+          animate: true,
+          cancelKeys: new Set(),
+          onVariableClick: solveFor,
+          onGlossaryClick: openGlossary,
+        });
+        await sleep(SETTLE_MS);
+        if (renderGenRef.current !== gen) return;
+        setBaseState(flipped);
+        setIsDone(true);
+        setIsAnimating(false);
+        return;
+      }
+
+      const move = moves[f];
+      if (!move) return;
+      setIsAnimating(true);
+      const before = f === 0 ? baseState : moves[f - 1].stateAfter;
+      const { mid, cancelKeys } = buildIntermediate(move, before);
+
+      setCaption(operateCaption(move));
+      renderStage(stageEl, toStage(mid, target, false), {
+        animate: true,
+        cancelKeys: new Set(),
+        onVariableClick: solveFor,
+        onGlossaryClick: openGlossary,
+      });
+      await sleep(OPERATE_MS);
+      if (renderGenRef.current !== gen) return;
+
+      setCaption(cancelCaption(move));
+      renderStage(stageEl, toStage(mid, target, false), {
+        animate: true,
+        cancelKeys: new Set(cancelKeys),
+        onVariableClick: solveFor,
+        onGlossaryClick: openGlossary,
+      });
+      await sleep(CANCEL_MS);
+      if (renderGenRef.current !== gen) return;
+
+      const doneHere = f === total - 1;
+      setCaption('Simplified.');
+      renderStage(stageEl, toStage(move.stateAfter, target, doneHere), {
+        animate: true,
+        cancelKeys: new Set(),
+        onVariableClick: solveFor,
+        onGlossaryClick: openGlossary,
+      });
+      await sleep(SETTLE_MS);
+      if (renderGenRef.current !== gen) return;
+      if (doneHere) setBaseState(move.stateAfter);
+      setIsDone(doneHere);
+      setIsAnimating(false);
+    },
+    [eqIdx, moves, finalIsLeft, baseState, target, solveFor, openGlossary]
+  );
+
+  const handleDeckStateChange = useCallback(
+    (s: RevealDeckState) => {
+      deck.onStateChange(s);
+      const prev = prevFragmentRef.current;
+      prevFragmentRef.current = s.fragmentIndex;
+      if (s.slideIndex !== eqIdx) return;
+      if (s.fragmentIndex > prev) playForward(s.fragmentIndex);
+      else if (s.fragmentIndex < prev) snapTo(s.fragmentIndex);
+    },
+    [eqIdx, playForward, snapTo, deck]
+  );
 
   const reset = () => {
     setTarget(null);
     setMoves([]);
-    setSteps([]);
-    setStepIndex(-1);
+    setFinalIsLeft(true);
     setBaseState(eq.initial);
+    deck.goToSlide(eqIdx);
   };
 
   const switchEquation = (i: number) => {
     setEqIdx(i);
     setTarget(null);
     setMoves([]);
-    setSteps([]);
-    setStepIndex(-1);
+    setFinalIsLeft(true);
     setBaseState(EQUATIONS[i].initial);
     setSampleVals(EQUATIONS[i].sample);
+    deck.goToSlide(i);
   };
 
   const switchTab = (t: Tab) => {
@@ -1012,23 +1132,6 @@ export function EquationRearrangerSimulator() {
     const firstIdx = EQUATIONS.findIndex((e) => e.category === t);
     switchEquation(firstIdx);
   };
-
-  const activeStep = target !== null && stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null;
-  const displayState = target === null ? eq.initial : activeStep ? activeStep.displayState : baseState;
-  const caption =
-    target === null
-      ? 'Click any variable to isolate it'
-      : steps.length === 0
-      ? `${target} is already alone`
-      : stepIndex === -1
-      ? `Solve for ${target} — ${steps.length} step${steps.length === 1 ? '' : 's'}. Press Next.`
-      : activeStep!.caption;
-
-  const layout = layoutEquation(displayState);
-  const cancelSet = new Set(activeStep?.cancelKeys ?? []);
-  const injectedSet = new Set(activeStep?.injectedKeys ?? []);
-  const isInjectSubStage = activeStep?.subStage === 'inject';
-  const isStrikeSubStage = activeStep?.subStage === 'strike';
 
   const finalState = moves.length > 0 ? moves[moves.length - 1].stateAfter : baseState;
   const finalDisplaySide = finalIsLeft ? finalState.right : finalState.left;
@@ -1079,62 +1182,24 @@ export function EquationRearrangerSimulator() {
           </span>
         </div>
 
-        <div className="flex justify-center items-center py-10 px-4 overflow-x-auto" style={{ minHeight: 220 }}>
-          <div className="relative transition-[width] duration-700 ease-in-out" style={{ width: layout.totalWidth, height: 130 }}>
-            {layout.tokens.map((tok) => {
-              if (tok.kind === 'bar') {
-                return (
-                  <div
-                    key={tok.key}
-                    className="absolute transition-all duration-[900ms] ease-in-out"
-                    style={{ left: tok.x - 26, top: 55 + tok.y - 1, width: 52, height: 2, background: INK }}
-                  />
-                );
-              }
-
-              const isCancelling = cancelSet.has(tok.key);
-              const isInjectedNow = isInjectSubStage && injectedSet.has(tok.key);
-              let opacity = 1;
-              if (isInjectedNow && !injectStarted) opacity = 0;
-
-              const isTargetTok = tok.targetSymbol === target;
-              const clickable = tok.kind === 'var' && (target === null || isDone);
-
-              return (
-                <button
-                  key={tok.key}
-                  onClick={clickable ? () => solveFor(tok.targetSymbol!) : undefined}
-                  disabled={!clickable}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-[900ms] ease-in-out select-none ${
-                    clickable ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-                  }`}
-                  style={{
-                    left: tok.x,
-                    top: 55 + tok.y,
-                    opacity,
-                    fontFamily: tok.kind === 'var' || tok.kind === 'const' ? 'Georgia, serif' : 'inherit',
-                    fontStyle: tok.kind === 'var' ? 'italic' : 'normal',
-                    fontWeight: tok.kind === 'equals' ? 700 : tok.kind === 'var' ? 700 : tok.kind === 'bracket' ? 600 : 600,
-                    fontSize: tok.kind === 'equals' ? 26 : tok.kind === 'var' ? 25 : tok.kind === 'bracket' ? 25 : tok.kind === 'const' ? 22 : 19,
-                    color: isTargetTok ? RED : tok.kind === 'op' || tok.kind === 'equals' || tok.kind === 'bracket' ? MUTE : tok.kind === 'const' ? BRASS : INK,
-                    background: isTargetTok ? 'rgba(179,74,60,0.12)' : 'transparent',
-                    borderRadius: 8,
-                    padding: tok.kind === 'var' || tok.kind === 'const' ? '2px 6px' : '2px 2px',
-                    border: 'none',
+        <RevealDeck ref={deck.ref} onStateChange={handleDeckStateChange}>
+          {EQUATIONS.map((e, i) => (
+            <section key={e.id}>
+              {Array.from({ length: i === eqIdx ? totalFragments : 0 }).map((_, fi) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <span className="fragment" key={fi} />
+              ))}
+              <div className="flex justify-center items-center py-10 px-4 overflow-x-auto" style={{ minHeight: 220 }}>
+                <div
+                  ref={(el) => {
+                    stageRefs.current[i] = el;
                   }}
-                >
-                  {tok.text}
-                  {isStrikeSubStage && isCancelling && (
-                    <div
-                      className="absolute left-1/2 top-1/2 w-9 h-[2px] pointer-events-none"
-                      style={{ background: RED, transform: 'translate(-50%,-50%) rotate(-10deg)' }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                  className="eq-stage"
+                />
+              </div>
+            </section>
+          ))}
+        </RevealDeck>
 
         <div className="px-4 pb-4 text-center">
           <span
@@ -1146,22 +1211,22 @@ export function EquationRearrangerSimulator() {
           </span>
         </div>
 
-        {target && steps.length > 0 && (
+        {target && totalFragments > 0 && (
           <div className="px-4 pb-3 flex flex-col items-center gap-2.5">
             <div className="flex items-center gap-3">
               <button
-                onClick={goBack}
-                disabled={stepIndex <= -1 || transitioning}
+                onClick={() => deck.prev()}
+                disabled={!deck.state.canPrev || isAnimating}
                 className="text-[12px] font-semibold px-3 py-1.5 rounded-full border border-[#d8cfb6] text-[#4a5a72] bg-white hover:bg-[#faf7f0] disabled:opacity-35 disabled:cursor-not-allowed"
               >
                 ◀ Back
               </button>
               <span className="text-[11.5px] font-mono text-[#a8a196] min-w-[90px] text-center">
-                {stepIndex === -1 ? 'Ready' : `Step ${stepIndex + 1} of ${steps.length}`}
+                {deck.state.fragmentIndex === -1 ? 'Ready' : `Step ${deck.state.fragmentIndex + 1} of ${totalFragments}`}
               </span>
               <button
-                onClick={goNext}
-                disabled={isDone || transitioning}
+                onClick={() => deck.next()}
+                disabled={!deck.state.canNext || isAnimating}
                 className="text-[12px] font-semibold px-3 py-1.5 rounded-full border border-[#1b2a41] text-white bg-[#1b2a41] hover:bg-[#2a3d5c] disabled:opacity-35 disabled:cursor-not-allowed"
               >
                 Next ▶
@@ -1172,7 +1237,7 @@ export function EquationRearrangerSimulator() {
                 <span
                   key={mi}
                   className={`text-[10.5px] font-mono px-2 py-1 rounded ${
-                    activeStep?.moveIndex === mi ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
+                    deck.state.fragmentIndex === mi ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
                   }`}
                 >
                   {mi + 1}. {moveStepLabel(m)}
@@ -1181,7 +1246,7 @@ export function EquationRearrangerSimulator() {
               {!finalIsLeft && (
                 <span
                   className={`text-[10.5px] font-mono px-2 py-1 rounded ${
-                    activeStep?.stepKind === 'flip' ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
+                    deck.state.fragmentIndex === moves.length ? 'bg-[#1b2a41] text-white' : 'bg-[#faf7f0] text-[#4a5a72] border border-[#eee6d3]'
                   }`}
                 >
                   {moves.length + 1}. flip sides
@@ -1241,8 +1306,12 @@ export function EquationRearrangerSimulator() {
             <p>The variable you clicked stays red for the entire derivation. Grey numbers and letters (G, k, π, ½, ε₀, c) are constants — they move with the algebra but can't be the target.</p>
             <p>
               <strong className="text-[#1b2a41]">Nothing plays automatically.</strong> Press Next to take each step —
-              apply the operation, watch it cancel, then settle — or ← / → on your keyboard. Back is instant, no
-              replay.
+              watch it operate, cancel, then settle in one motion — or ← / → on your keyboard once you've clicked
+              into the equation. Back is instant, no replay.
+            </p>
+            <p>
+              Click the small <strong className="text-[#1b2a41]">ⓘ</strong> next to any variable to see what it
+              means and its unit — separate from clicking the variable itself, which solves for it.
             </p>
           </div>
         </div>
@@ -1354,6 +1423,15 @@ export function EquationRearrangerSimulator() {
           </div>
         </div>
       </div>
+
+      {glossary && (
+        <GlossaryOverlay
+          entry={glossary.entry}
+          anchorEl={glossary.anchorEl}
+          isTarget={glossary.isTarget}
+          onClose={() => setGlossary(null)}
+        />
+      )}
     </div>
   );
 }

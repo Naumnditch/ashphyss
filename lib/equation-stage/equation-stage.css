@@ -1,0 +1,132 @@
+/* Equation-stage token styling — same AshPhys lab-notebook palette used
+ * throughout the simulations (ink/mute/brass/red), scoped under one class
+ * so nothing here can leak onto the rest of the page. */
+.eq-stage {
+  --eq-ink: #1b2a41;
+  --eq-mute: #4a5a72;
+  --eq-brass: #b8823d;
+  --eq-red: #b34a3c;
+  position: relative;
+}
+
+.eq-token {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  user-select: none;
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+}
+
+.eq-token[data-kind='variable'] {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 25px;
+  color: var(--eq-ink);
+}
+.eq-token[data-kind='variable'][data-clickable='true'] {
+  cursor: pointer;
+}
+.eq-token[data-kind='variable'][data-clickable='true']:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+.eq-token[data-kind='variable'][data-target='true'] {
+  color: var(--eq-red);
+  background: rgba(179, 74, 60, 0.12);
+}
+.eq-token[data-kind='number'] {
+  font-family: Georgia, serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--eq-brass);
+}
+.eq-token[data-kind='operator'] {
+  font-weight: 600;
+  font-size: 19px;
+  color: var(--eq-mute);
+  padding: 2px 2px;
+}
+.eq-token[data-kind='equals'] {
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--eq-mute);
+  padding: 2px 2px;
+}
+.eq-token[data-kind='bracket'] {
+  font-weight: 600;
+  font-size: 25px;
+  color: var(--eq-mute);
+  padding: 2px 2px;
+}
+.eq-token[data-kind='fractionBar'] {
+  background: var(--eq-ink);
+  height: 2px;
+  border-radius: 0;
+  padding: 0;
+}
+.eq-token[data-kind='unit'] {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eq-mute);
+  padding: 1px 3px;
+}
+
+/* Cancel-strike overlay — a short rotated red bar, same treatment as a
+ * pen stroke crossing out a cancelled factor. */
+.eq-strike {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: 2px;
+  background: var(--eq-red);
+  transform: translate(-50%, -50%) rotate(-10deg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.eq-strike.eq-strike-on {
+  opacity: 1;
+}
+
+/* Glossary info-glyph — rides along with its parent token (inherits any
+ * transform applied to the token during a FLIP move), a deliberately
+ * separate click target from the variable symbol itself. */
+.eq-gloss-glyph {
+  position: absolute;
+  top: -2px;
+  right: -9px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--eq-mute);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  font-family: Georgia, serif;
+  line-height: 15px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.eq-gloss-glyph:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+@keyframes eqGlossPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
