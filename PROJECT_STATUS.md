@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (First-party analytics: analytics_events table, site-wide event tracking, /admin/analytics dashboard — plus the pricing restructure and session/device-limit auth system below, all three awaiting the same JWT_SECRET confirmation before push, see that entry)
+Last updated: 2026-09-21 (Coulomb's law practice set: 41 questions on new topic 17.4, 5 original SVG diagrams, numeric-grading tolerance fix, difficulty-tiered question order — see that entry. Previously: First-party analytics: analytics_events table, site-wide event tracking, /admin/analytics dashboard — plus the pricing restructure and session/device-limit auth system below, all three awaiting the same JWT_SECRET confirmation before push, see that entry)
 
 ---
 
@@ -193,6 +193,76 @@ Last updated: 2026-09-16 (First-party analytics: analytics_events table, site-wi
   attach) and the iyzico_payment_id column is reused to store the
   shopier payment_id (no schema rename attempted - it's a generic
   external-payment-id column despite the name).
+
+### Coulomb's law practice set — topic 17.4 (NEW)
+- 41 questions seeded on a NEW topic `17.4 Coulomb's law (extension)`
+  under Chapter 17 Static Electricity (order 4, required_tier 1 to match
+  17.2/17.3). Chapter 17 had no problems before; these are problem_number
+  1-41. Sourced from a set of Coulomb's law worksheets supplied by the
+  user.
+- WHY A NEW TOPIC: Coulomb's law is not in the Cambridge IGCSE 0625 core
+  syllabus - it's AS/A Level and AP material. There was no existing
+  "coulombs-law" topic to attach to. It follows naturally from 17.3
+  Electric fields, so it lives there marked "(extension)", and the topic
+  description says so. The curriculum page picks up the 🎯 Practice
+  button automatically for any topic that has problems, so no page
+  wiring was needed.
+- 17 multiple choice / 24 numeric. Difficulty bands 1/2/3 = 7/14/20,
+  which is what drives the ordering (see below): conceptual first,
+  calculations next, the multi-charge and equilibrium problems last.
+- ALL 41 ANSWERS WERE RECOMPUTED FROM THE GIVEN QUANTITIES BEFORE
+  SEEDING, and 14 of the answers supplied with the worksheets were
+  wrong - mostly power-of-ten slips (Q23 out by 100, Q34/Q36 by 10,
+  Q21 quoted 2.0 C for 2.0 × 10⁻⁴ C). The seeded answers are the
+  recomputed ones. Q41 is the one where the SOURCE was self-consistent
+  and the restatement was not: its quoted forces only work at the Bohr
+  radius 5.3 × 10⁻¹¹ m, not the "~5.0 × 10⁻¹¹ m" it was described with,
+  so the question states 5.3 × 10⁻¹¹ m. Full list of corrections is in
+  the session that added this.
+- Formulas are written in Unicode (F = k|q₁q₂|/r², 1.8 × 10¹⁰ N, µC),
+  NOT LaTeX. The app has no KaTeX/MathJax anywhere and question_text
+  renders as plain text in a <p>, so LaTeX source would have shown
+  literally. Matching the existing questions' Unicode style was the
+  cheap correct option; if a math renderer is ever added, these are the
+  rows to revisit.
+- Multi-part worksheet questions (the a/b/c/d ones) were folded into
+  single questions that ask for the final quantity, with the full
+  part-by-part working in the explanation - the practice engine has no
+  multi-part answer type. Likewise the two "sketch the force diagram"
+  questions became multiple choice about what the sketch shows (Q33's
+  correct answer is that the two arrows are EQUAL in length - Newton's
+  third law - which is also the trap the original worksheet answer key
+  got wrong).
+- 5 new ORIGINAL SVG diagrams in components/practice/CoulombDiagrams.tsx,
+  same pattern as MomentumDiagrams.tsx: keys `diagram:coulomb-*` stored
+  in question_image_url, no hosted image files, nothing reproduced from
+  the source PDFs. Keys: coulomb-two-spheres-unequal,
+  coulomb-two-positive-equal, coulomb-pith-balls, coulomb-three-inline,
+  coulomb-right-angle. They show the SETUP only (charges, signs,
+  separations) and never the force arrows, since the questions ask the
+  student to work the forces out.
+- NEW components/practice/PracticeDiagram.tsx routes a `diagram:` key to
+  the right diagram set by prefix. PracticeSession now imports that
+  instead of MomentumDiagram directly, so the next diagram set just
+  needs a line there.
+- Seed SQL committed at database/seed_coulombs_law.sql (4 DO blocks, run
+  in order; block 1 creates the topic and clears the set, so the file is
+  re-runnable). Already applied to the live Supabase project.
+
+### Two fixes the Coulomb set forced (affect ALL topics)
+- NUMERIC GRADING: submit/route.ts computed its tolerance as
+  `max(|correct| × 2%, 0.001)`. That absolute floor meant any answer
+  within 0.001 of zero was marked CORRECT whenever the real answer was
+  itself tiny - a student typing 0 scored the 2.4 × 10⁻⁸ C pith-ball
+  question. Now relative-only, with the absolute path used solely when
+  the correct answer is exactly 0. No topic had numeric questions before
+  this one, so nothing was mis-graded in production.
+- QUESTION ORDER: PracticeSession shuffled all questions flat, which
+  with 41 questions spanning three difficulty bands could open a session
+  on the hardest problem in the set. `shuffleByDifficulty` now shuffles
+  WITHIN each band and plays the bands in ascending order. Topics whose
+  questions are all one difficulty (every other topic today) behave
+  exactly as before.
 
 ### Momentum practice questions with diagrams (NEW)
 - `question_image_url` column existed in schema but was never wired to

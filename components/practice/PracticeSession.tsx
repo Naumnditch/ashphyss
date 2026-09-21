@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
-import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
+import { PracticeDiagram } from '@/components/practice/PracticeDiagram';
 import { trackEvent } from '@/lib/analytics/client';
 
 interface Option {
@@ -52,6 +52,25 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
+/**
+ * Shuffle within each difficulty band, then play the bands in order, so a
+ * long question set eases the student in rather than opening on its hardest
+ * problem. Topics whose questions all share one difficulty (most of them)
+ * behave exactly as a plain shuffle did.
+ */
+function shuffleByDifficulty(questions: Question[]): Question[] {
+  const bands = new Map<number, Question[]>();
+  for (const q of questions) {
+    const band = q.difficultyLevel ?? 1;
+    const bucket = bands.get(band);
+    if (bucket) bucket.push(q);
+    else bands.set(band, [q]);
+  }
+  return [...bands.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((band) => shuffle(bands.get(band)!));
+}
+
 export function PracticeSession({ topicId }: { topicId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,7 +107,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       setTopic(data.data.topic);
       setSimulation(data.data.simulation);
       setMastery(data.data.mastery);
-      setQueue(shuffle(data.data.questions));
+      setQueue(shuffleByDifficulty(data.data.questions));
       setIndex(0);
       setLoading(false);
     } catch {
@@ -141,7 +160,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       setIndex(index + 1);
     } else {
       // loop back through a freshly shuffled set until mastered or the student stops
-      setQueue(shuffle(queue));
+      setQueue(shuffleByDifficulty(queue));
       setIndex(0);
     }
   };
@@ -183,7 +202,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
           <button
             onClick={() => {
               setMastery({ ...mastery, mastered: false, correctStreak: 0 });
-              setQueue(shuffle(queue));
+              setQueue(shuffleByDifficulty(queue));
               setIndex(0);
             }}
             className="border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-2.5 rounded-lg font-semibold text-sm"
@@ -218,7 +237,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       {/* Question card */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mb-5">
         {current.imageUrl && current.imageUrl.startsWith('diagram:') && (
-          <MomentumDiagram diagramKey={current.imageUrl} />
+          <PracticeDiagram diagramKey={current.imageUrl} />
         )}
         {current.imageUrl && !current.imageUrl.startsWith('diagram:') && (
           // eslint-disable-next-line @next/next/no-img-element

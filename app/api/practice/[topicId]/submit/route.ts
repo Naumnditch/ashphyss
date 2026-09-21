@@ -14,6 +14,7 @@ import { query } from '@/lib/db/client';
 
 const MASTERY_STREAK = 5;
 const NUMERIC_TOLERANCE = 0.02; // 2% relative tolerance for numeric answers
+const ZERO_ANSWER_TOLERANCE = 1e-9; // only used when the correct answer is exactly 0
 
 export async function POST(req: NextRequest, { params }: { params: { topicId: string } }) {
   const user = await getCurrentUser();
@@ -51,7 +52,11 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     const correctNum = parseFloat(problem.answer_correct);
     const submittedNum = parseFloat(submittedAnswer);
     if (!isNaN(correctNum) && !isNaN(submittedNum)) {
-      const tolerance = Math.max(Math.abs(correctNum) * NUMERIC_TOLERANCE, 0.001);
+      // Relative tolerance only. An absolute floor would wave through any
+      // near-zero guess on answers that are themselves tiny (a charge of
+      // 2.4e-8 C, say), which is most of the Coulomb's law question set.
+      const tolerance =
+        correctNum === 0 ? ZERO_ANSWER_TOLERANCE : Math.abs(correctNum) * NUMERIC_TOLERANCE;
       isCorrect = Math.abs(correctNum - submittedNum) <= tolerance;
     }
   } else {
