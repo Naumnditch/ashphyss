@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
 import { trackEvent } from '@/lib/analytics/client';
+import { previewAnswer, FORMAT_HINT } from '@/lib/grading/numericAnswer';
 
 interface Option {
   id: string;
@@ -67,6 +68,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
     isCorrect: boolean;
     correctAnswerLabel: string;
     explanation: string;
+    feedback?: string | null;
   } | null>(null);
 
   const loadQuestions = useCallback(async () => {
@@ -108,8 +110,13 @@ export function PracticeSession({ topicId }: { topicId: string }) {
 
   const current = queue[index];
 
+  // Live mirror of how the grader will read a free-entry answer. Purely
+  // informational — it never blocks or rewrites what the student typed.
+  const answerPreview =
+    current?.answerType === 'numeric' && !result ? previewAnswer(selected) : null;
+
   const handleCheck = async () => {
-    if (!current || !selected) return;
+    if (!current || !selected.trim()) return;
     setChecking(true);
     try {
       const res = await fetch(`/api/practice/${topicId}/submit`, {
@@ -126,6 +133,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
         isCorrect: data.data.isCorrect,
         correctAnswerLabel: data.data.correctAnswerLabel,
         explanation: data.data.explanation,
+        feedback: data.data.feedback,
       });
       setMastery(data.data.mastery);
       setChecking(false);
@@ -256,15 +264,31 @@ export function PracticeSession({ topicId }: { topicId: string }) {
         )}
 
         {current.answerType === 'numeric' && (
-          <input
-            type="number"
-            step="any"
-            value={selected}
-            disabled={!!result}
-            onChange={(e) => setSelected(e.target.value)}
-            placeholder="Your answer"
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-          />
+          <div>
+            {/* type="text", not "number": a number input silently discards
+                anything it considers invalid, so "1.8 x 10^10" reached the
+                server as an empty string. Nothing here validates as you
+                type — the preview below just mirrors what the grader will
+                read, and grading happens only on submit. */}
+            <input
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              value={selected}
+              disabled={!!result}
+              onChange={(e) => setSelected(e.target.value)}
+              placeholder="Your answer"
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+            />
+            <p className="mt-2 text-xs text-gray-500">{FORMAT_HINT}</p>
+            {answerPreview && (
+              <p className="mt-1 text-xs text-blue-700">
+                Reading this as <span className="font-semibold">{answerPreview}</span>
+              </p>
+            )}
+          </div>
         )}
 
         {current.answerType === 'free_text' && (
@@ -289,6 +313,9 @@ export function PracticeSession({ topicId }: { topicId: string }) {
           <p className={`font-semibold mb-1.5 ${result.isCorrect ? 'text-green-800' : 'text-red-800'}`}>
             {result.isCorrect ? '✓ Correct!' : `✕ Not quite — the answer was ${result.correctAnswerLabel}`}
           </p>
+          {result.feedback && !result.isCorrect && (
+            <p className="text-sm text-red-900 leading-relaxed mb-2">{result.feedback}</p>
+          )}
           {result.explanation && (
             <p className="text-sm text-gray-700 leading-relaxed">{result.explanation}</p>
           )}
@@ -323,7 +350,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       {!result ? (
         <button
           onClick={handleCheck}
-          disabled={!selected || checking}
+          disabled={!selected.trim() || checking}
           className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-lg font-semibold text-[15px] disabled:opacity-40"
         >
           {checking ? 'Checking…' : 'Check Answer'}

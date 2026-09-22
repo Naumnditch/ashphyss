@@ -12,9 +12,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserTier } from '@/lib/subscriptions/getUserTier';
 import { query } from '@/lib/db/client';
+import { gradeNumeric, specFromProblem, type GradeReason } from '@/lib/grading/numericAnswer';
 
 const MASTERY_STREAK = 5;
-const NUMERIC_TOLERANCE = 0.02; // 2% relative tolerance for numeric answers
 
 export async function POST(req: NextRequest, { params }: { params: { topicId: string } }) {
   const user = await getCurrentUser();
@@ -37,7 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
   }
 
   const problemResult = await query(
-    `SELECT id, answer_type, answer_correct, explanation FROM problems WHERE id = $1 AND topic_id = $2`,
+    `SELECT id, answer_type, answer_correct, explanation,
+            answer_unit, answer_unit_required, answer_tolerance, answer_sign_sensitive, answer_alternates
+     FROM problems WHERE id = $1 AND topic_id = $2`,
     [problemId, params.topicId]
   );
   if (problemResult.rows.length === 0) {
@@ -47,8 +49,14 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
 
   let isCorrect = false;
   let correctAnswerLabel = problem.answer_correct;
+  let gradingMethod: 'mcq' | 'numeric' | 'text' = 'text';
+  let gradeReason: GradeReason | null = null;
+  let toleranceUsed: number | null = null;
+  let normalizedAnswer: string | null = null;
+  let feedback: string | null = null;
 
   if (problem.answer_type === 'multiple_choice') {
+    gradingMethod = 'mcq';
     const correctOption = await query(
       `SELECT id, option_text FROM problem_options WHERE problem_id = $1 AND is_correct = TRUE LIMIT 1`,
       [problemId]
@@ -56,16 +64,30 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     if (correctOption.rows.length > 0) {
       isCorrect = String(submittedAnswer) === String(correctOption.rows[0].id);
       correctAnswerLabel = correctOption.rows[0].option_text;
+      gradeReason = isCorrect ? 'match' : 'wrong-value';
+      normalizedAnswer = correctAnswerLabel;
     }
   } else if (problem.answer_type === 'numeric') {
-    const correctNum = parseFloat(problem.answer_correct);
-    const submittedNum = parseFloat(submittedAnswer);
-    if (!isNaN(correctNum) && !isNaN(submittedNum)) {
-      const tolerance = Math.max(Math.abs(correctNum) * NUMERIC_TOLERANCE, 0.001);
-      isCorrect = Math.abs(correctNum - submittedNum) <= tolerance;
+    const spec = specFromProblem(problem);
+    if (spec) {
+      gradingMethod = 'numeric';
+      toleranceUsed = spec.tolerance ?? 0.02;
+      const result = gradeNumeric(String(submittedAnswer), spec);
+      isCorrect = result.correct;
+      gradeReason = result.reason;
+      feedback = result.feedback;
+      normalizedAnswer = result.parsedValue === null ? null : String(result.parsedValue);
+      if (problem.answer_unit) correctAnswerLabel = `${problem.answer_correct} ${problem.answer_unit}`;
+    } else {
+      // The stored answer isn't a number — fall back to text comparison
+      // rather than marking every submission wrong.
+      isCorrect = String(submittedAnswer).trim().toLowerCase() === String(problem.answer_correct ?? '').trim().toLowerCase();
+      gradeReason = isCorrect ? 'match' : 'wrong-value';
     }
   } else {
     isCorrect = String(submittedAnswer).trim().toLowerCase() === String(problem.answer_correct).trim().toLowerCase();
+    gradeReason = isCorrect ? 'match' : 'wrong-value';
+    normalizedAnswer = String(submittedAnswer).trim().toLowerCase();
   }
 
   await query(
@@ -136,6 +158,13 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
       isCorrect,
       correctAnswerLabel,
       explanation: problem.explanation,
+      feedback,
+      grading: {
+        method: gradingMethod,
+        reason: gradeReason,
+        tolerance: toleranceUsed,
+        readAs: normalizedAnswer,
+      },
       mastery: {
         correctStreak: newStreak,
         bestStreak,
