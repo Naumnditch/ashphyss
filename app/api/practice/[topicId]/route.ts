@@ -32,8 +32,9 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
   }
 
   const problemsResult = await query(
-    `SELECT id, question_text, question_image_url, answer_type, explanation, difficulty_level, "order"
-     FROM problems WHERE topic_id = $1 ORDER BY "order" ASC`,
+    `SELECT id, problem_number, question_text, question_image_url, answer_type, difficulty_level
+     FROM problems WHERE topic_id = $1
+     ORDER BY COALESCE(problem_number, "order"), "order"`,
     [params.topicId]
   );
 
@@ -51,8 +52,21 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
     }, {});
   }
 
-  const questions = problemsResult.rows.map((p) => ({
+  // The student's latest answer to each question, so their progress map
+  // survives a reload.
+  const latestResult = await query(
+    `SELECT DISTINCT ON (problem_id) problem_id, is_correct
+     FROM practice_attempts
+     WHERE student_id = $1 AND topic_id = $2
+     ORDER BY problem_id, created_at DESC`,
+    [user.id, params.topicId]
+  );
+  const lastCorrect = new Map<string, boolean>(latestResult.rows.map((r) => [r.problem_id, r.is_correct]));
+
+  const questions = problemsResult.rows.map((p, i) => ({
     id: p.id,
+    number: p.problem_number ?? i + 1,
+    lastResult: lastCorrect.has(p.id) ? (lastCorrect.get(p.id) ? 'correct' : 'wrong') : null,
     questionText: p.question_text,
     imageUrl: p.question_image_url,
     answerType: p.answer_type,

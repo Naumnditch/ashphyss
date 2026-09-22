@@ -6,6 +6,8 @@ import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
 import { trackEvent } from '@/lib/analytics/client';
 import { previewAnswer, FORMAT_HINT } from '@/lib/grading/numericAnswer';
+import { nextQuestionIndex, type QuestionStatus } from '@/lib/practice/progress';
+import { QuestionMap } from '@/components/practice/QuestionMap';
 
 interface Option {
   id: string;
@@ -15,6 +17,8 @@ interface Option {
 
 interface Question {
   id: string;
+  number: number;
+  lastResult: 'correct' | 'wrong' | null;
   questionText: string;
   imageUrl?: string | null;
   answerType: 'multiple_choice' | 'numeric' | 'free_text';
@@ -44,13 +48,26 @@ interface SimInfo {
   url_path: string;
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+// Skipped questions are remembered per browser; right and wrong come from the server.
+function skippedKey(topicId: string) {
+  return `ashphys:practice-skipped:${topicId}`;
+}
+
+function readSkipped(topicId: string): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(skippedKey(topicId)) || '[]'));
+  } catch {
+    return new Set();
   }
-  return copy;
+}
+
+function writeSkipped(topicId: string, statuses: Record<string, QuestionStatus>) {
+  try {
+    const ids = Object.keys(statuses).filter((id) => statuses[id] === 'skipped');
+    localStorage.setItem(skippedKey(topicId), JSON.stringify(ids));
+  } catch {
+    // Private browsing or blocked storage: skips just won't survive a reload.
+  }
 }
 
 export function PracticeSession({ topicId }: { topicId: string }) {
@@ -61,6 +78,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
   const [queue, setQueue] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
   const [mastery, setMastery] = useState<Mastery | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, QuestionStatus>>({});
 
   const [selected, setSelected] = useState<string>('');
   const [checking, setChecking] = useState(false);
@@ -90,8 +108,16 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       setTopic(data.data.topic);
       setSimulation(data.data.simulation);
       setMastery(data.data.mastery);
-      setQueue(shuffle(data.data.questions));
-      setIndex(0);
+      const questions: Question[] = data.data.questions;
+      const skipped = readSkipped(topicId);
+      const initial: Record<string, QuestionStatus> = {};
+      for (const q of questions) {
+        initial[q.id] = q.lastResult ?? (skipped.has(q.id) ? 'skipped' : 'untried');
+      }
+      setQueue(questions);
+      setStatuses(initial);
+      // Start where "next" would: the first untried question, then skipped, then wrong.
+      setIndex(nextQuestionIndex(questions.map((q) => initial[q.id]), questions.length - 1));
       setLoading(false);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -147,22 +173,35 @@ export function PracticeSession({ topicId }: { topicId: string }) {
         feedback: data.data.feedback,
       });
       setMastery(data.data.mastery);
+      setStatuses((prev) => {
+        const updated: Record<string, QuestionStatus> = { ...prev, [current.id]: data.data.isCorrect ? 'correct' : 'wrong' };
+        writeSkipped(topicId, updated);
+        return updated;
+      });
       setChecking(false);
     } catch {
       setChecking(false);
     }
   };
 
-  const handleNext = () => {
+  const statusList = queue.map((q) => statuses[q.id] ?? 'untried');
+
+  const goTo = (i: number) => {
     setSelected('');
     setResult(null);
-    if (index + 1 < queue.length) {
-      setIndex(index + 1);
-    } else {
-      // loop back through a freshly shuffled set until mastered or the student stops
-      setQueue(shuffle(queue));
-      setIndex(0);
-    }
+    setIndex(i);
+  };
+
+  const handleNext = () => goTo(nextQuestionIndex(statusList, index));
+
+  const handleSkip = () => {
+    if (!current) return;
+    const updated = { ...statuses };
+    // Skipping a question already answered just moves on; it keeps its result.
+    if (updated[current.id] === 'untried') updated[current.id] = 'skipped';
+    setStatuses(updated);
+    writeSkipped(topicId, updated);
+    goTo(nextQuestionIndex(queue.map((q) => updated[q.id] ?? 'untried'), index));
   };
 
   if (loading) {
@@ -202,8 +241,7 @@ export function PracticeSession({ topicId }: { topicId: string }) {
           <button
             onClick={() => {
               setMastery({ ...mastery, mastered: false, correctStreak: 0 });
-              setQueue(shuffle(queue));
-              setIndex(0);
+              goTo(nextQuestionIndex(statusList, queue.length - 1));
             }}
             className="border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-2.5 rounded-lg font-semibold text-sm"
           >
@@ -234,8 +272,24 @@ export function PracticeSession({ topicId }: { topicId: string }) {
         </span>
       </div>
 
+      <QuestionMap numbers={queue.map((q) => q.number)} statuses={statusList} current={index} onSelect={goTo} />
+
       {/* Question card */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <span className="text-sm font-semibold text-gray-900">
+            Question {current.number} <span className="font-normal text-gray-400">of {queue.length}</span>
+          </span>
+          {!result && statuses[current.id] === 'correct' && (
+            <span className="text-xs font-medium text-green-700">✓ You got this right before — answer again to practise</span>
+          )}
+          {!result && statuses[current.id] === 'wrong' && (
+            <span className="text-xs font-medium text-red-700">✕ Wrong last time — have another go</span>
+          )}
+          {!result && statuses[current.id] === 'skipped' && (
+            <span className="text-xs font-medium text-gray-500">– You skipped this one</span>
+          )}
+        </div>
         {current.imageUrl && current.imageUrl.startsWith('diagram:') && (
           <MomentumDiagram diagramKey={current.imageUrl} />
         )}
@@ -359,13 +413,22 @@ export function PracticeSession({ topicId }: { topicId: string }) {
 
       {/* Action button */}
       {!result ? (
-        <button
-          onClick={handleCheck}
-          disabled={!selected.trim() || checking}
-          className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-lg font-semibold text-[15px] disabled:opacity-40"
-        >
-          {checking ? 'Checking…' : 'Check Answer'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleSkip}
+            disabled={checking}
+            className="shrink-0 border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-3 rounded-lg font-semibold text-[15px] disabled:opacity-40"
+          >
+            Skip for now
+          </button>
+          <button
+            onClick={handleCheck}
+            disabled={!selected.trim() || checking}
+            className="flex-1 bg-gray-900 hover:bg-black text-white py-3 rounded-lg font-semibold text-[15px] disabled:opacity-40"
+          >
+            {checking ? 'Checking…' : 'Check Answer'}
+          </button>
+        </div>
       ) : (
         <button
           onClick={handleNext}

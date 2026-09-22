@@ -2808,3 +2808,26 @@ break a line after, so "m/s²" never splits as "m/" + "s²".
 - Chart colours are the dataviz reference palette's first two categorical
   slots (blue #2a78d6, orange #eb6834), validated against the white surface;
   legend and label text stay in neutral ink, never the series colour.
+
+## Practice: skip, jump to any question, and a progress map (2026-09-22)
+
+- Practice now runs through a lesson's questions in their numbered order (the
+  same numbers as the PDF worksheet) instead of a shuffle.
+- **Skip for now** sits beside Check Answer. A skipped question is marked and
+  comes back later.
+- A **progress map** above the question shows one numbered square per
+  question: green ✓ correct, red ✕ wrong, grey dashed "–" skipped, white not
+  tried; the current one is ringed. Clicking a square jumps to it. A bar and
+  legend give the counts. Revisiting an answered question says how it went
+  last time and lets the student answer again.
+- "Next" follows `nextQuestionIndex` (`lib/practice/progress.ts`): the next
+  untried question, then skipped ones, then wrong ones, each searched forward
+  from the current question with wrap-around. The session opens the same way.
+- Correct/wrong comes from the student's latest `practice_attempts` row per
+  question (GET /api/practice/[topicId] now returns `number` and `lastResult`
+  per question), so it survives a reload and a new device. Skips are not
+  attempts, so they are kept per browser in localStorage
+  (`ashphys:practice-skipped:<topicId>`); losing them only resets those
+  questions to "not tried".
+- Skipping does not touch the mastery streak, which is still derived from
+  attempts only.
