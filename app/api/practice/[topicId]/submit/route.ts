@@ -1,11 +1,15 @@
 /**
  * POST /api/practice/[topicId]/submit
- * Body: { problemId: string, submittedAnswer: string }
+ * Body: { problemId, submittedAnswer, timeSpentMs?, hintUsed? }
  *
- * Grades the answer, records the submission, and updates the
- * student's mastery streak for this topic (IXL-style: a streak of
- * MASTERY_STREAK correct answers in a row marks the topic mastered;
- * a wrong answer resets the streak to 0).
+ * Grades the answer, appends it to practice_attempts (the source of truth)
+ * and returns the mastery state derived from that log — IXL-style, a run of
+ * MASTERY_STREAK correct answers marks the topic mastered and a wrong answer
+ * resets the run.
+ *
+ * Grading happens here and only here: the client never sees the expected
+ * answer, and attempts are only ever written from this route, so a student
+ * cannot forge a correct attempt.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,8 +17,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { getUserTier } from '@/lib/subscriptions/getUserTier';
 import { query } from '@/lib/db/client';
 import { gradeNumeric, specFromProblem, type GradeReason } from '@/lib/grading/numericAnswer';
-
-const MASTERY_STREAK = 5;
+import { openPracticeSession, recordAttempt } from '@/lib/practice/attempts';
 
 export async function POST(req: NextRequest, { params }: { params: { topicId: string } }) {
   const user = await getCurrentUser();
@@ -31,13 +34,13 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     return NextResponse.json({ success: false, error: 'This lesson requires a higher plan' }, { status: 403 });
   }
 
-  const { problemId, submittedAnswer } = await req.json();
+  const { problemId, submittedAnswer, timeSpentMs, hintUsed } = await req.json();
   if (!problemId || submittedAnswer === undefined || submittedAnswer === null) {
     return NextResponse.json({ success: false, error: 'Missing answer' }, { status: 400 });
   }
 
   const problemResult = await query(
-    `SELECT id, answer_type, answer_correct, explanation,
+    `SELECT id, answer_type, answer_correct, explanation, chapter_id,
             answer_unit, answer_unit_required, answer_tolerance, answer_sign_sensitive, answer_alternates
      FROM problems WHERE id = $1 AND topic_id = $2`,
     [problemId, params.topicId]
@@ -90,67 +93,37 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     normalizedAnswer = String(submittedAnswer).trim().toLowerCase();
   }
 
+  // problem_submissions is kept in step with practice_attempts because the
+  // admin analytics dashboard still reads it.
   await query(
-    `INSERT INTO problem_submissions (student_id, problem_id, submitted_answer, is_correct, points_earned)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [user.id, problemId, String(submittedAnswer), isCorrect, isCorrect ? 1 : 0]
+    `INSERT INTO problem_submissions (student_id, problem_id, submitted_answer, is_correct, points_earned, time_spent_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      user.id,
+      problemId,
+      String(submittedAnswer),
+      isCorrect,
+      isCorrect ? 1 : 0,
+      typeof timeSpentMs === 'number' ? Math.round(timeSpentMs / 1000) : null,
+    ]
   );
 
-  const existing = await query(
-    `SELECT correct_streak, best_streak, total_attempted, total_correct, mastered
-     FROM topic_mastery WHERE student_id = $1 AND topic_id = $2`,
-    [user.id, params.topicId]
-  );
-
-  let newStreak: number;
-  let bestStreak: number;
-  let totalAttempted: number;
-  let totalCorrect: number;
-
-  if (existing.rows.length === 0) {
-    newStreak = isCorrect ? 1 : 0;
-    bestStreak = newStreak;
-    totalAttempted = 1;
-    totalCorrect = isCorrect ? 1 : 0;
-    await query(
-      `INSERT INTO topic_mastery (student_id, topic_id, correct_streak, best_streak, total_attempted, total_correct, mastered, mastered_at, last_practiced_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-      [
-        user.id,
-        params.topicId,
-        newStreak,
-        bestStreak,
-        totalAttempted,
-        totalCorrect,
-        newStreak >= MASTERY_STREAK,
-        newStreak >= MASTERY_STREAK ? new Date() : null,
-      ]
-    );
-  } else {
-    const prev = existing.rows[0];
-    newStreak = isCorrect ? prev.correct_streak + 1 : 0;
-    bestStreak = Math.max(prev.best_streak, newStreak);
-    totalAttempted = prev.total_attempted + 1;
-    totalCorrect = prev.total_correct + (isCorrect ? 1 : 0);
-    const justMastered = !prev.mastered && newStreak >= MASTERY_STREAK;
-
-    await query(
-      `UPDATE topic_mastery
-       SET correct_streak = $1, best_streak = $2, total_attempted = $3, total_correct = $4,
-           mastered = $5, mastered_at = COALESCE(mastered_at, $6), last_practiced_at = NOW(), updated_at = NOW()
-       WHERE student_id = $7 AND topic_id = $8`,
-      [
-        newStreak,
-        bestStreak,
-        totalAttempted,
-        totalCorrect,
-        newStreak >= MASTERY_STREAK || prev.mastered,
-        justMastered ? new Date() : null,
-        user.id,
-        params.topicId,
-      ]
-    );
-  }
+  const sessionId = await openPracticeSession(user.id, params.topicId);
+  const mastery = await recordAttempt({
+    studentId: user.id,
+    problemId,
+    topicId: params.topicId,
+    chapterId: problem.chapter_id,
+    sessionId,
+    rawAnswer: String(submittedAnswer),
+    normalizedAnswer,
+    isCorrect,
+    gradingMethod,
+    gradeReason,
+    toleranceUsed,
+    hintUsed: hintUsed === true,
+    timeSpentMs: typeof timeSpentMs === 'number' && timeSpentMs >= 0 ? Math.round(timeSpentMs) : null,
+  });
 
   return NextResponse.json({
     success: true,
@@ -165,14 +138,7 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
         tolerance: toleranceUsed,
         readAs: normalizedAnswer,
       },
-      mastery: {
-        correctStreak: newStreak,
-        bestStreak,
-        totalAttempted,
-        totalCorrect,
-        mastered: newStreak >= MASTERY_STREAK,
-        streakNeeded: MASTERY_STREAK,
-      },
+      mastery,
     },
   });
 }

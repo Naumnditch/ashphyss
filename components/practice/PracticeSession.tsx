@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
@@ -110,6 +110,13 @@ export function PracticeSession({ topicId }: { topicId: string }) {
 
   const current = queue[index];
 
+  // When the current question first appeared, so the attempt log can record
+  // how long it took. Reset whenever the question changes.
+  const questionShownAt = useRef<number>(Date.now());
+  useEffect(() => {
+    questionShownAt.current = Date.now();
+  }, [current?.id]);
+
   // Live mirror of how the grader will read a free-entry answer. Purely
   // informational — it never blocks or rewrites what the student typed.
   const answerPreview =
@@ -122,7 +129,11 @@ export function PracticeSession({ topicId }: { topicId: string }) {
       const res = await fetch(`/api/practice/${topicId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problemId: current.id, submittedAnswer: selected }),
+        body: JSON.stringify({
+          problemId: current.id,
+          submittedAnswer: selected,
+          timeSpentMs: Date.now() - questionShownAt.current,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
