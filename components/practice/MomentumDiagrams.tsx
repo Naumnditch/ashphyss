@@ -181,6 +181,15 @@ const DIAGRAMS: Record<string, React.ReactNode> = {
   ),
 };
 
+/**
+ * Whether a question's `diagram:` key actually resolves to a figure. Callers
+ * that must not fail silently — the printable worksheet, for one — use this
+ * to say so rather than render nothing where a figure was promised.
+ */
+export function hasDiagram(diagramKey: string): boolean {
+  return Boolean(DIAGRAMS[diagramKey.replace(/^diagram:/, '')]);
+}
+
 export function MomentumDiagram({ diagramKey }: { diagramKey: string }) {
   const key = diagramKey.replace(/^diagram:/, '');
   const svg = DIAGRAMS[key];

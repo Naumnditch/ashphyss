@@ -37,11 +37,21 @@ export default async function PracticePage({ params }: { params: { topicId: stri
         ← Back to {topic.chapter_title}
       </Link>
 
-      <div className="mb-6">
-        <div className="text-sm text-gray-400 font-medium mb-1">
-          Chapter {topic.chapter_number} · Practice
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div>
+          <div className="text-sm text-gray-400 font-medium mb-1">
+            Chapter {topic.chapter_number} · Practice
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{topic.topic_name}</h1>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{topic.topic_name}</h1>
+        {allowed && (
+          <Link
+            href={`/practice/${topic.id}/worksheet`}
+            className="text-sm font-semibold border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg whitespace-nowrap"
+          >
+            Printable worksheet
+          </Link>
+        )}
       </div>
 
       {allowed ? (
