@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     return NextResponse.json({ success: false, error: 'Topic not found' }, { status: 404 });
   }
   const tier = await getUserTier(user.id);
-  if (tier < topicResult.rows[0].required_tier) {
+  if (user.role !== 'admin' && tier < topicResult.rows[0].required_tier) {
     return NextResponse.json({ success: false, error: 'This lesson requires a higher plan' }, { status: 403 });
   }
 

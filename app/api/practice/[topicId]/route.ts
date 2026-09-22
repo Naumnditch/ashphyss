@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
   const topic = topicResult.rows[0];
 
   const tier = await getUserTier(user.id);
-  if (tier < topic.required_tier) {
+  if (user.role !== 'admin' && tier < topic.required_tier) {
     return NextResponse.json({ success: false, error: 'This lesson requires a higher plan', locked: true, requiredTier: topic.required_tier }, { status: 403 });
   }
 

@@ -51,7 +51,7 @@ export default async function WorksheetPage({
   if (!topic) notFound();
 
   const tier = await getUserTier(user.id);
-  if (tier < topic.required_tier) redirect(`/practice/${topic.id}`);
+  if (user.role !== 'admin' && tier < topic.required_tier) redirect(`/practice/${topic.id}`);
 
   // Only staff may ever see the answers, and the key is only built into the
   // page when they explicitly ask for it.

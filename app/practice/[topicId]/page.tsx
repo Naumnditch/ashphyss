@@ -26,7 +26,7 @@ export default async function PracticePage({ params }: { params: { topicId: stri
   if (!topic) notFound();
 
   const tier = await getUserTier(user.id);
-  const allowed = tier >= topic.required_tier;
+  const allowed = user.role === 'admin' || tier >= topic.required_tier;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
