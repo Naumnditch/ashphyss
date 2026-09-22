@@ -2590,3 +2590,104 @@ duplicating that data, per the explicit instruction this was built to.
     former crash cases and at least one square-root derivation
     (T=2π√(L/g)→g) to watch the multi-move-through-a-radical chain
     animate correctly.
+
+## Practice grading overhaul + per-student analytics (2026-09-22)
+
+Two changes, shipped in the order below. The grading fix was urgent: correct
+answers typed in standard form were marked wrong during a live class.
+
+### What the grading bug actually was
+
+Three separate faults, not one. The brief guessed at `parseFloat()` and
+missing tolerance; only the first of those was right, and it wasn't the one
+that did the damage in the classroom.
+
+1. **The client input, and this is the one that broke the lesson.**
+   `components/practice/PracticeSession.tsx` used `<input type="number">`.
+   A number input silently discards anything the browser considers invalid,
+   so `1.8 x 10^10` never left the page — the server received an empty or
+   truncated string. Three stored submissions of exactly `"1"` against
+   answers of 6.75e9, 0.974 and 0.335 are the fingerprint of this. Those
+   original keystrokes are gone and cannot be recovered by re-grading.
+2. **The server grader.** `parseFloat()` stops at the first character it
+   cannot read, so `parseFloat('1.8 x 10^10') === 1.8`, and
+   `parseFloat('18,000,000,000') === 18`.
+3. **Sign sensitivity.** A student answered `-8437500` to "calculate the
+   magnitude of the force" (expected 8.44e6, 0.03% off) and was marked wrong.
+
+Tolerance was **not** a cause: the old code already applied the same 2%
+relative tolerance the brief asked for (`NUMERIC_TOLERANCE = 0.02`).
+
+### What shipped
+
+- `lib/grading/numericAnswer.ts` — pure, physics-aware grader.
+  `gradeNumeric(input, spec)` returns `{correct, reason, parsedValue,
+  parsedUnit, feedback}`. Handles e-notation, `m x 10^n`, `m * 10^n`,
+  superscripts, LaTeX, thousands separators, SI prefixes and unit words;
+  2% relative tolerance with a per-question override; sign-insensitive by
+  default. 63 tests in `lib/grading/__tests__/`.
+- The practice input is now `type="text"` with a live preview of how the
+  grader will read the answer ("Reading this as 1.8 × 10¹⁰ N") and a format
+  hint. Nothing validates on keystroke; grading happens on submit.
+- `practice_attempts` + `practice_sessions`: append-only attempt log, now the
+  source of truth. `topic_mastery` is kept as the fast-read cache but is
+  recomputed from the log on every write, so the two cannot disagree.
+- `/teacher/analytics`, `/teacher/analytics/[studentId]`,
+  `/teacher/analytics/problems`, all CSV-exportable, over four new views.
+
+### Where the proposed schema diverged from the real database
+
+- **`user_id` → `student_id`, referencing `public.users`.** There is no
+  `auth.users` here: the app has its own users table and a custom JWT.
+  `problem_submissions` and `topic_mastery` already use `student_id`.
+- **`topic_id`/`chapter_id` are `uuid`, not `text`** — that is what
+  `topics.id` and `chapters.id` are.
+- **`session_id` is nullable.** An attempt must never be lost because a
+  session row could not be opened.
+- **No `question_type` column was added.** `problems.answer_type` already
+  distinguishes `multiple_choice` from `numeric`.
+- **The MCQ conversion list was already done.** Q1, 3, 4, 6, 7, 9, 10, 11,
+  12, 13, 14, 17, 18, 31, 32 of "17.4 Coulomb's law (extension)" were all
+  already `multiple_choice` with four plausible-misconception distractors
+  (plus Q33 and Q41, which weren't on the list). Q18 is a single question,
+  not the sub-parts a–d the brief described.
+- **Enrolment has no join table.** A class is a row in `sections`
+  (`teacher_id`, `join_code`) and a student is enrolled by
+  `users.section_id`. `v_class_topic_stats` joins through that.
+- **There are currently zero rows in `sections`**, so no student is in any
+  class. The teacher pages therefore show an explicit "create a class"
+  empty state rather than a blank table.
+- **RLS as specified cannot work here.** Every table in this database
+  already has RLS enabled with zero policies, owned by `postgres`, and the
+  app connects as the owner — so the API roles are denied everything and the
+  app bypasses RLS entirely. A policy written against `auth.uid()` would
+  match nothing and protect nothing. Access control therefore lives in
+  `lib/practice/access.ts` (`rosterScope`, `canViewStudent`), which every
+  analytics read goes through.
+- **Per-question grading columns had to be added** to `problems`
+  (`answer_unit`, `answer_unit_required`, `answer_tolerance`,
+  `answer_sign_sensitive`, `answer_alternates`) — there was nowhere to put
+  the per-question overrides the brief asked for.
+
+### Re-grade result
+
+25 historical submissions were migrated into `practice_attempts`; 6 of them
+were numeric. Re-grading flipped **2** rows to correct:
+
+- Q20, `-8437500` against 8.44e6 N — sign-insensitive magnitude.
+- Q40, `1` against 0.974 N — inside the 5% tolerance now set for the
+  multi-step net-force questions.
+
+The other three wrong numeric rows stayed wrong (`46656` against 4.67e11 is
+genuinely wrong working; the two `"1"` rows are what the number input left
+behind and cannot be reconstructed). `topic_mastery` was rebuilt from the
+corrected log for all four student × topic pairs that have history.
+
+### Gotchas
+
+- Unit case matters and is deliberately preserved: `MN` is mega, `mN` is
+  milli — a factor of 10⁹. The grader lowercases only the numeric part.
+- Superscript runs are folded to `^` + ASCII digits **before** any other
+  digit handling, or `10¹⁰` would parse as 1010.
+- `scripts/regrade-attempts.ts` is idempotent and defaults to a dry run;
+  pass `--apply` to write. It needs `DATABASE_URL`.
