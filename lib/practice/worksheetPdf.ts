@@ -61,7 +61,8 @@ const TEXT_X = MARGIN_X + NUMBER_W;
 const TEXT_W = CONTENT_W - NUMBER_W;
 const TAG_W = 66;
 const QUESTION_GAP = 18;
-const DIAGRAM_W = 300;
+const DIAGRAM_W = 260;
+const SIDE_DIAGRAM_W = 210;
 
 const INK = '#111827';
 const GREY = '#6b7280';
@@ -87,6 +88,15 @@ export function workingLines(answerType: string, difficulty: number | null): num
   if (level <= 1) return 2;
   if (level <= 3) return 4;
   return 6;
+}
+
+/**
+ * PDFKit breaks lines after "/", stranding "m/" at a line end. The division
+ * slash (U+2215) looks the same but is not a break opportunity, so units like
+ * m/s² and N·m²/C² stay in one piece.
+ */
+export function keepUnitsTogether(text: string): string {
+  return text.replace(/(?<=\S)\/(?=\S)/g, '\u2215');
 }
 
 /** "1.8e10" → "1.8 × 10¹⁰", the way the answer is written on paper. */
@@ -252,12 +262,13 @@ function drawQuestion(
   const difficulty = problem.difficulty_level ? DIFFICULTY_LABELS[problem.difficulty_level] : null;
   const textW = difficulty ? TEXT_W - TAG_W - 8 : TEXT_W;
   const textOptions = { width: textW, lineGap: 2.5 };
+  const questionText = keepUnitsTogether(problem.question_text);
 
   doc.font('regular').fontSize(10.5);
-  const textH = doc.heightOfString(problem.question_text, textOptions);
+  const textH = doc.heightOfString(questionText, textOptions);
   if (draw) {
     doc.font('bold').fontSize(10.5).fillColor(INK).text(number, MARGIN_X, y, { lineBreak: false });
-    doc.font('regular').fontSize(10.5).fillColor(INK).text(problem.question_text, TEXT_X, y, textOptions);
+    doc.font('regular').fontSize(10.5).fillColor(INK).text(questionText, TEXT_X, y, textOptions);
     if (difficulty) {
       const tagX = MARGIN_X + CONTENT_W - TAG_W;
       doc.roundedRect(tagX, y, TAG_W, 13, 3).lineWidth(0.6).strokeColor(RULE).stroke();
@@ -270,32 +281,27 @@ function drawQuestion(
   }
   y += Math.max(textH, 13);
 
-  if (problem.question_image_url?.startsWith('diagram:')) {
-    const figure = diagramSvg(problem.question_image_url);
-    if (figure) {
-      const height = (DIAGRAM_W * figure.height) / figure.width;
-      y += 8;
-      if (draw) {
-        doc.roundedRect(TEXT_X, y, DIAGRAM_W, height, 6).fillAndStroke('#faf7f0', '#e4ddcc');
-        SVGtoPDF(doc, figure.svg, TEXT_X, y, {
-          width: DIAGRAM_W,
-          height,
-          fontCallback: (_family: string, bold: boolean) => (bold ? 'bold' : 'regular'),
-        });
-      }
-      y += height;
-    } else {
-      y += 8;
-      if (draw) {
-        doc.roundedRect(TEXT_X, y, TEXT_W, 24, 4).lineWidth(0.7).dash(3, { space: 3 }).strokeColor('#9ca3af').stroke().undash();
-        doc
-          .font('regular')
-          .fontSize(8.5)
-          .fillColor(GREY)
-          .text('The figure for this question is not available yet.', TEXT_X + 10, y + 8, { lineBreak: false });
-      }
-      y += 24;
+  const promisesFigure = problem.question_image_url?.startsWith('diagram:') ?? false;
+  const figure = promisesFigure ? diagramSvg(problem.question_image_url!) : null;
+  const lines = choices.length > 0 ? 0 : workingLines(problem.answer_type, problem.difficulty_level);
+  // Beside the working lines the figure costs no extra height; a question
+  // with no ruled space (multiple choice) gets it above the options instead.
+  const figureBeside = figure !== null && lines > 0;
+
+  if (figure && !figureBeside) {
+    y += 8;
+    y += drawFigure(doc, figure, TEXT_X, y, DIAGRAM_W, draw);
+  } else if (promisesFigure && !figure) {
+    y += 8;
+    if (draw) {
+      doc.roundedRect(TEXT_X, y, TEXT_W, 24, 4).lineWidth(0.7).dash(3, { space: 3 }).strokeColor('#9ca3af').stroke().undash();
+      doc
+        .font('regular')
+        .fontSize(8.5)
+        .fillColor(GREY)
+        .text('The figure for this question is not available yet.', TEXT_X + 10, y + 8, { lineBreak: false });
     }
+    y += 24;
   }
 
   if (choices.length > 0) {
@@ -305,7 +311,7 @@ function drawQuestion(
     const optionW = TEXT_X + TEXT_W - optionX;
     for (const choice of choices) {
       const marked = showAnswers && choice.is_correct;
-      const label = marked ? `${choice.option_text}   ✓ correct` : choice.option_text;
+      const label = keepUnitsTogether(marked ? `${choice.option_text}   ✓ correct` : choice.option_text);
       doc.font(marked ? 'bold' : 'regular').fontSize(10);
       const h = doc.heightOfString(label, { width: optionW, lineGap: 1.5 });
       if (draw) {
@@ -320,13 +326,16 @@ function drawQuestion(
     return y;
   }
 
-  const lines = workingLines(problem.answer_type, problem.difficulty_level);
   if (lines > 0) {
+    const top = y + 8;
+    const linesEnd = figureBeside ? TEXT_X + TEXT_W - SIDE_DIAGRAM_W - 14 : TEXT_X + TEXT_W;
+    const figureBottom = figureBeside ? top + drawFigure(doc, figure!, TEXT_X + TEXT_W - SIDE_DIAGRAM_W, top, SIDE_DIAGRAM_W, draw) : top;
     y += 4;
     for (let i = 0; i < lines; i++) {
       y += 20;
-      if (draw) doc.moveTo(TEXT_X, y).lineTo(TEXT_X + TEXT_W, y).lineWidth(0.5).strokeColor(RULE).stroke();
+      if (draw) doc.moveTo(TEXT_X, y).lineTo(linesEnd, y).lineWidth(0.5).strokeColor(RULE).stroke();
     }
+    y = Math.max(y, figureBottom);
   }
 
   y += 22;
@@ -350,6 +359,27 @@ function drawQuestion(
     y += 12;
   }
   return y;
+}
+
+/** Draws a figure on its panel and returns the height it takes. */
+function drawFigure(
+  doc: PDFKit.PDFDocument,
+  figure: { svg: string; width: number; height: number },
+  x: number,
+  y: number,
+  width: number,
+  draw: boolean
+): number {
+  const height = (width * figure.height) / figure.width;
+  if (draw) {
+    doc.roundedRect(x, y, width, height, 6).fillAndStroke('#faf7f0', '#e4ddcc');
+    SVGtoPDF(doc, figure.svg, x, y, {
+      width,
+      height,
+      fontCallback: (_family: string, bold: boolean) => (bold ? 'bold' : 'regular'),
+    });
+  }
+  return height;
 }
 
 function drawFooters(doc: PDFKit.PDFDocument, topicName: string, showAnswers: boolean) {

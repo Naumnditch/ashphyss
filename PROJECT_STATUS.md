@@ -2745,3 +2745,45 @@ corrected log for all four student × topic pairs that have history.
   login redirect; student → worksheet, also when asking for `?answers=1`;
   admin → answer key (17 marked options + 24 numeric answers = 41). 11 A4
   pages, ~55 kB.
+
+## Circular motion, gravitation and more Coulomb practice (2026-09-22)
+
+From the owner's three worksheets (a circular motion / gravitation / Coulomb
+question pack, a circular motion worksheet with answers, and a worked toy-plane
+conical pendulum example). None of this is in the Cambridge IGCSE 0625 core, so
+it sits in "(extension)" topics like 17.4:
+
+| Topic | Where | Questions |
+|---|---|---|
+| **3.7 Circular motion (extension)** — new | Ch 3 Forces and Motion, after 3.6 (3.3 already introduces circular motion qualitatively) | 35: speed/period/acceleration, centripetal force and tension, vertical circles, conical pendulums |
+| **24.3 Gravitation and orbits (extension)** — new | Ch 24 Earth and the Solar System | 7: field strength, F = Gm₁m₂/r², orbital speed/radius/period, planet mass from an orbit |
+| 17.4 Coulomb's law (extension) | existing | +16 (Q42–57): net force at right angles and in triangles, solving for r and for q |
+
+- Multi-part source questions ("a) speed b) acceleration c) tension") became one
+  question per part, since each practice question has one graded answer.
+  "Which force provides it?" and "what if the cord breaks?" became multiple choice.
+- Answers were recomputed, not copied. **The source answer key is wrong for its
+  Q9** (2.0 kg, r = 4.0 m, 2 rev in 6 s): it gives 75 m/s, 1.4 × 10³ m/s² and
+  2.8 × 10³ N; the correct values are 8.38 m/s, 17.5 m/s² and 35.1 N. **The
+  worked toy-plane example has Fc = 0.68 N**; 2.45 × tan 28° = 1.30 N, which
+  gives T = 2.46 s. "Average velocity" over a full lap was reworded to speed.
+- One source question mixed "mC" and "mu C" for the equilateral triangle; it is
+  stored as µC throughout (+4.0, −6.0, +2.0 µC).
+- g = 9.8 m/s² is stated in every question that needs it; multi-step answers
+  have a 5% tolerance so g = 10 also marks correct.
+- `database/seeds/2026-09-22-circular-motion-gravitation-coulomb.py` generates
+  the `.sql` beside it: every stored answer and every number in each worked
+  explanation is computed from the question's own values. The rows were applied
+  through the Supabase MCP (no `DATABASE_URL` in the container) and checked by
+  md5 against the file. IDs are deterministic (uuid5) and every insert is
+  `ON CONFLICT DO NOTHING`, so re-running is safe.
+- 13 new SVG figures (circular motion, orbits, charge layouts) in
+  `components/practice/MomentumDiagrams.tsx`, labelled with the quantities only.
+
+### Worksheet PDF layout change
+
+With many figures the PDF ran to ~15 pages. A written-answer question now
+draws its figure beside its working lines instead of above them (multiple
+choice keeps it above the options): 3.7 is 10 pages, 17.4 went from 11 to 9.
+Slashes inside units print as the division slash (∕), which PDFKit will not
+break a line after, so "m/s²" never splits as "m/" + "s²".

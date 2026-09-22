@@ -9,6 +9,7 @@ import {
   toSvgMarkup,
   formatAnswer,
   worksheetFilename,
+  keepUnitsTogether,
   type WorksheetInput,
   type WorksheetProblem,
 } from '../worksheetPdf';
@@ -52,7 +53,8 @@ async function pdfPages(input: WorksheetInput): Promise<string[]> {
   const pages: string[] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const content = await (await doc.getPage(i)).getTextContent();
-    pages.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '));
+    // Units are printed with a division slash (∕) so they never wrap; read it back as "/".
+    pages.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' ').replace(/\u2215/g, '/'));
   }
   return pages;
 }
@@ -126,6 +128,10 @@ const DIAGRAM_KEYS = [
   'momentum-headon-1', 'momentum-recoil-1', 'momentum-wall-1', 'momentum-oblique-1',
   'coulomb-two-spheres-unequal', 'coulomb-two-positive-equal', 'coulomb-pith-balls',
   'coulomb-three-inline', 'coulomb-right-angle',
+  'circular-horizontal', 'circular-vertical-bottom', 'circular-vertical-top', 'circular-conical',
+  'gravity-two-bodies', 'gravity-orbit',
+  'coulomb-two-charges', 'coulomb-l-shape-origin', 'coulomb-l-shape-millicoulomb',
+  'coulomb-l-shape-nanocoulomb', 'coulomb-l-shape-unit', 'coulomb-equilateral', 'coulomb-triangle-scalene',
 ];
 
 describe('toSvgMarkup', () => {
@@ -170,6 +176,13 @@ describe('formatAnswer', () => {
   it('leaves anything else alone', () => {
     expect(formatAnswer('112.5')).toBe('112.5');
     expect(formatAnswer('B')).toBe('B');
+  });
+});
+
+describe('keepUnitsTogether', () => {
+  it('swaps a slash inside a unit for the unbreakable division slash, and leaves spaced slashes alone', () => {
+    expect(keepUnitsTogether('9.8 m/s²')).toBe('9.8 m∕s²');
+    expect(keepUnitsTogether('N·m²/C² and a / b')).toBe('N·m²∕C² and a / b');
   });
 });
 
