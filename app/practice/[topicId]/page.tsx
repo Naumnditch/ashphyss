@@ -45,12 +45,24 @@ export default async function PracticePage({ params }: { params: { topicId: stri
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{topic.topic_name}</h1>
         </div>
         {allowed && (
-          <Link
-            href={`/practice/${topic.id}/worksheet`}
-            className="text-sm font-semibold border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg whitespace-nowrap"
-          >
-            Printable worksheet
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/api/practice/${topic.id}/worksheet`}
+              download
+              className="text-sm font-semibold bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg whitespace-nowrap"
+            >
+              Download PDF
+            </a>
+            {(user.role === 'teacher' || user.role === 'admin') && (
+              <a
+                href={`/api/practice/${topic.id}/worksheet?answers=1`}
+                download
+                className="text-sm font-semibold border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg whitespace-nowrap"
+              >
+                Answer key PDF
+              </a>
+            )}
+          </div>
         )}
       </div>
 

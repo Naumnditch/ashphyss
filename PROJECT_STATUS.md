@@ -2691,3 +2691,57 @@ corrected log for all four student × topic pairs that have history.
   digit handling, or `10¹⁰` would parse as 1010.
 - `scripts/regrade-attempts.ts` is idempotent and defaults to a dry run;
   pass `--apply` to write. It needs `DATABASE_URL`.
+
+## Practice worksheets as downloadable PDFs; all lessons free again (2026-09-22)
+
+### What changed
+
+- **Download PDF** on every practice page (`/practice/[topicId]`) returns a real
+  A4 PDF built on the server by `GET /api/practice/[topicId]/worksheet`.
+  Teachers and admins also get **Answer key PDF** (`?answers=1`); the key is
+  only ever built for staff, whatever the query string says.
+- The earlier print-styled HTML page (`/practice/[topicId]/worksheet`) is
+  gone. It crashed in production (`TypeError: i is not a function`): the
+  server page called `hasDiagram()` from `MomentumDiagrams.tsx`, a
+  `'use client'` module, and a client module's plain functions are not
+  callable from a server component. That file has no hooks, so the
+  directive was removed.
+- Admins bypass the practice tier gate (page, worksheet, practice GET and
+  submit routes).
+- **All 63 Plus-tier topics and the 1 Plus-tier simulation were set back to
+  `required_tier = 0`** at the owner's request: everything is free to every
+  signed-up user until tiers are switched on again from `/admin/curriculum`.
+  The gating code is untouched.
+- Drew the five Coulomb's law figures the questions said "as shown" but
+  that had never existed (`coulomb-two-spheres-unequal`,
+  `coulomb-two-positive-equal`, `coulomb-pith-balls`,
+  `coulomb-three-inline`, `coulomb-right-angle`). They show only what the
+  question text states — no force arrows — so they never give the answer
+  away. They appear on screen and in the PDF.
+
+### How the PDF is built (`lib/practice/worksheetPdf.ts`)
+
+- PDFKit, with DejaVu Sans bundled in `lib/practice/fonts/` (licence
+  alongside). PDFKit's built-in fonts only cover Latin-1; the questions use
+  −, ×, ⁻¹¹, µ, Ω, ρ, √ and subscripts, all of which DejaVu covers.
+- Diagrams go through svg-to-pdfkit. Next.js forbids `react-dom/server`
+  inside route handlers, so `toSvgMarkup()` serialises the diagram's React
+  tree itself; a test asserts it matches React's own output for every
+  diagram key the problems table uses.
+- Layout is manual (PDFKit margins are 0 so it never paginates on its own).
+  Each question is measured by the same code that draws it, then moved to a
+  new page if it would not fit — no question is ever split across pages.
+- `next.config.js`: `pdfkit` and `svg-to-pdfkit` are
+  `serverComponentsExternalPackages`, and `outputFileTracingIncludes` ships
+  the fonts with the route's serverless function.
+
+### Verified
+
+- Unit tests (`lib/practice/__tests__/worksheetPdf.test.ts`) read the PDF
+  back with pdfjs: the student copy never contains an answer, the key marks
+  every one, pages never start mid-question.
+- The compiled route was run under `next start` against the real 41
+  Coulomb questions (database stubbed at the `pg` layer): logged-out →
+  login redirect; student → worksheet, also when asking for `?answers=1`;
+  admin → answer key (17 marked options + 24 numeric answers = 41). 11 A4
+  pages, ~55 kB.
