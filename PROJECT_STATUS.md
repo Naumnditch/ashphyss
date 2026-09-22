@@ -2787,3 +2787,24 @@ draws its figure beside its working lines instead of above them (multiple
 choice keeps it above the options): 3.7 is 10 pages, 17.4 went from 11 to 9.
 Slashes inside units print as the division slash (∕), which PDFKit will not
 break a line after, so "m/s²" never splits as "m/" + "s²".
+
+## Admin portal: sidebar navigation and an infographic overview (2026-09-22)
+
+- The admin navigation moved from a horizontally scrolling tab strip to a
+  sticky left sidebar (`components/admin/AdminSidebar.tsx`), grouped as
+  Dashboard / People / Content / Requests / Billing with an icon per page. The
+  account block (name, My devices, Log out) sits at its foot. Below `lg` it
+  collapses to a bar showing the current page and a Menu button.
+- Queues that need an admin carry an amber count badge: pending teacher
+  applications, pending payment receipts, open video requests and paid
+  tutoring bookings not yet scheduled (`getPendingCounts` in
+  `lib/admin/overview.ts`, queried once per admin page load by the layout).
+- `/admin` is now a dashboard: a "Needs your attention" row (icon + count +
+  label, amber only when something is waiting), headline tiles, daily active
+  users (30 days, every day present so quiet days show as gaps), a ranked bar
+  of what students did, correct vs incorrect practice answers per day, and
+  meters for practice accuracy and lesson coverage (lessons with questions /
+  all lessons). Every chart has a "Show as a table" view.
+- Chart colours are the dataviz reference palette's first two categorical
+  slots (blue #2a78d6, orange #eb6834), validated against the white surface;
+  legend and label text stay in neutral ink, never the series colour.
