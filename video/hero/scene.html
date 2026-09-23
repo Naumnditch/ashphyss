@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AshPhys hero video scene</title>
+<link rel="stylesheet" href="./node_modules/@fontsource-variable/inter/index.css" />
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #060a13; }
+  body { font-family: 'Inter Variable', system-ui, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+  canvas { position: fixed; inset: 0; display: block; }
+  /* Soft vignette so the frame's edges fall away into the background. */
+  #vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, rgba(6,10,19,0) 45%, rgba(6,10,19,0.55) 100%); }
+  #scrim { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 55% 45% at 12% 88%, rgba(6,10,19,0.78) 0%, rgba(6,10,19,0) 100%); }
+  .caption { position: fixed; left: 7.5vw; bottom: 12vh; opacity: 0; will-change: transform, opacity, filter; }
+  .caption .index { font-size: 1.05vw; font-weight: 600; letter-spacing: 0.32em; color: #8fb4ff; margin-bottom: 1.4vh; }
+  .caption .title { font-size: 3.9vw; font-weight: 650; letter-spacing: -0.025em; line-height: 1.05; }
+  .caption .sub { margin-top: 1.8vh; font-size: 1.45vw; font-weight: 450; color: #c9d6ee; letter-spacing: 0.01em; }
+  .caption .sub em { font-style: italic; }
+  .caption sup, .caption sub { font-size: 0.62em; line-height: 0; }
+  .label { position: fixed; transform: translate(-50%, -50%); font-size: 1.5vw; font-weight: 600; font-style: italic;
+    opacity: 0; text-shadow: 0 0 12px rgba(6,10,19,0.9); }
+  #endcard { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+  #endcard img { width: 34vw; filter: invert(1) drop-shadow(0 0 24px rgba(120,160,255,0.25)); }
+  #endcard .tagline { margin-top: 3.6vh; font-size: 2.3vw; font-weight: 500; letter-spacing: -0.01em; color: #e8eefb; }
+  #endcard .pillars { margin-top: 2.4vh; font-size: 1.15vw; font-weight: 600; letter-spacing: 0.34em; color: #8fb4ff; }
+  #endcard .url { margin-top: 5vh; font-size: 1.25vw; font-weight: 500; color: #9aa9c4; letter-spacing: 0.06em; }
+  #fade { position: fixed; inset: 0; background: #060a13; pointer-events: none; }
+</style>
+<script type="importmap">
+  { "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/"
+  } }
+</script>
+</head>
+<body>
+<div id="vignette"></div>
+<div id="scrim"></div>
+
+<div class="caption" id="cap-atom">
+  <div class="index">01 — MATTER</div>
+  <div class="title">Every atom.</div>
+  <div class="sub"><sup>238</sup>U → <sup>234</sup>Th + α</div>
+</div>
+<div class="caption" id="cap-orbit">
+  <div class="index">02 — MOTION</div>
+  <div class="title">Every orbit.</div>
+  <div class="sub"><em>F</em> = <em>mv</em><sup>2</sup> / <em>r</em></div>
+</div>
+<div class="caption" id="cap-wave">
+  <div class="index">03 — WAVES</div>
+  <div class="title">Every wave.</div>
+  <div class="sub"><em>v</em> = <em>f</em>λ</div>
+</div>
+<div class="caption" id="cap-field">
+  <div class="index">04 — FIELDS</div>
+  <div class="title">Every field.</div>
+  <div class="sub"><em>F</em> = <em>kq</em><sub>1</sub><em>q</em><sub>2</sub> / <em>r</em><sup>2</sup></div>
+</div>
+
+<div class="label" id="label-v" style="color:#7fdcff">v</div>
+<div class="label" id="label-f" style="color:#ffc36e">F</div>
+<div class="label" id="label-r" style="color:#c9d6ee">r</div>
+
+<div id="endcard">
+  <img src="../../public/assets/logo.png" alt="AshPhys" />
+  <div class="tagline">Physics, made visible.</div>
+  <div class="pillars">LESSONS · SIMULATIONS · PRACTICE</div>
+  <div class="url">ashphys.org</div>
+</div>
+<div id="fade"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+
+// ── Timeline (seconds) ───────────────────────────────────────────────────
+const DURATION = 20;
+
+const BG = 0x060a13;
+const BLUE = new THREE.Color('#4f8cff');
+const CYAN = new THREE.Color('#5ad1ff');
+const AMBER = new THREE.Color('#f2b35b');
+const WHITE = new THREE.Color('#ffffff');
+
+// ── Helpers: easing and windows, all pure functions of time ──────────────
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+const smooth = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
+const smoother = (x) => { x = clamp01(x); return x * x * x * (x * (x * 6 - 15) + 10); };
+/** 0 before a, rises to 1 by b, holds, falls from c to 0 by d. */
+const window4 = (t, a, b, c, d) => (t < b ? smooth((t - a) / (b - a)) : t < c ? 1 : 1 - smooth((t - c) / (d - c)));
+
+// Seeded random, so every render of the video is identical.
+let seed = 20260923;
+const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+// ── Renderer, camera, post-processing ────────────────────────────────────
+const W = window.innerWidth, H = window.innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H);
+renderer.setClearColor(BG, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(BG);
+const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 200);
+
+const target = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: 4 });
+const composer = new EffectComposer(renderer, target);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.85, 0.55, 0.12);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+scene.add(new THREE.AmbientLight(0xb8c8ff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(5, 6, 8);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x5ad1ff, 1.4);
+rim.position.set(-6, -2, -5);
+scene.add(rim);
+
+// A fat line (Line2) with per-vertex colours; additive, so colours fading to
+// black fade to nothing.
+function makeLine(points, colors, width = 2.2) {
+  const geo = new LineGeometry();
+  geo.setPositions(points.flatMap((p) => [p.x, p.y, p.z]));
+  geo.setColors(colors.flatMap((c) => [c.r, c.g, c.b]));
+  const mat = new LineMaterial({ linewidth: width, vertexColors: true, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, worldUnits: false });
+  mat.resolution.set(W, H);
+  const line = new Line2(geo, mat);
+  line.computeLineDistances();
+  line.frustumCulled = false;
+  return line;
+}
+
+function softPointMaterial(extraUniforms, vertex, fragment) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 1 }, uTime: { value: 0 }, uScale: { value: H / 2 }, ...extraUniforms },
+    vertexShader: vertex,
+    fragmentShader: fragment,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+}
+
+const SOFT_POINT_FRAG = /* glsl */`
+  uniform float uOpacity;
+  varying vec3 vColor; varying float vAlpha;
+  void main() {
+    vec2 c = gl_PointCoord - 0.5; float d = length(c);
+    float a = smoothstep(0.5, 0.0, d); a *= a;
+    gl_FragColor = vec4(vColor * a * vAlpha * uOpacity, 1.0);
+  }`;
+
+// ── Background dust: present throughout, gives depth to every shot ───────
+const dust = (() => {
+  const n = 1400, pos = new Float32Array(n * 3), size = new Float32Array(n), tw = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = 18 + rand() * 40, th = rand() * Math.PI * 2, ph = Math.acos(2 * rand() - 1);
+    pos.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.7, r * Math.sin(ph) * Math.sin(th)], i * 3);
+    size[i] = 0.6 + rand() * 1.8; tw[i] = rand() * 6.28;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  g.setAttribute('aTw', new THREE.BufferAttribute(tw, 1));
+  const m = softPointMaterial({}, /* glsl */`
+    uniform float uTime, uScale; attribute float aSize, aTw; varying vec3 vColor; varying float vAlpha;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = aSize * uScale * 0.06 / -mv.z * 6.0;
+      vColor = mix(vec3(0.55, 0.68, 1.0), vec3(1.0), 0.4);
+      vAlpha = 0.35 + 0.25 * sin(uTime * 1.3 + aTw);
+    }`, SOFT_POINT_FRAG);
+  const p = new THREE.Points(g, m);
+  scene.add(p);
+  return { points: p, material: m };
+})();
+
+// ── Scene 1: the atom ────────────────────────────────────────────────────
+const atom = new THREE.Group();
+scene.add(atom);
+
+const RINGS = [0, 1, 2].map((i) => {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(16), THREE.MathUtils.degToRad(8), THREE.MathUtils.degToRad(i * 60)));
+  return { q, a: 3.2, b: 1.12, speed: 1.9 + i * 0.23, phase: i * 2.1 };
+});
+const ringPoint = (ring, theta, out = new THREE.Vector3()) =>
+  out.set(ring.a * Math.cos(theta), ring.b * Math.sin(theta), 0).applyQuaternion(ring.q);
+
+const ringLines = RINGS.map((ring) => {
+  const pts = [], cols = [];
+  for (let i = 0; i <= 220; i++) { pts.push(ringPoint(ring, (i / 220) * Math.PI * 2)); cols.push(BLUE.clone().multiplyScalar(0.55)); }
+  const line = makeLine(pts, cols, 1.6);
+  atom.add(line);
+  return line;
+});
+
+const nucleus = new THREE.Group();
+atom.add(nucleus);
+const nucleons = [];
+{
+  const geo = new THREE.SphereGeometry(0.2, 32, 16);
+  const count = 13;
+  for (let i = 0; i < count; i++) {
+    const proton = i % 2 === 0;
+    const mat = new THREE.MeshStandardMaterial({
+      color: proton ? AMBER : new THREE.Color('#a9c2ee'), emissive: proton ? AMBER : new THREE.Color('#3b5fa8'),
+      emissiveIntensity: proton ? 0.55 : 0.35, roughness: 0.35, metalness: 0.1, transparent: true,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    if (i > 0) {
+      const y = 1 - (i / (count - 1)) * 2, r = Math.sqrt(1 - y * y), th = i * 2.399963;
+      m.position.set(Math.cos(th) * r, y, Math.sin(th) * r).multiplyScalar(0.3);
+    }
+    nucleus.add(m);
+    nucleons.push(m);
+  }
+}
+
+// Electrons with fading trails, computed from their own past positions.
+const TRAIL = 46;
+const electrons = RINGS.map(() => {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 12), new THREE.MeshBasicMaterial({ color: CYAN.clone().multiplyScalar(2.2), transparent: true }));
+  atom.add(mesh);
+  const pts = Array.from({ length: TRAIL }, () => new THREE.Vector3());
+  const cols = Array.from({ length: TRAIL }, (_, i) => CYAN.clone().multiplyScalar(Math.pow(1 - i / (TRAIL - 1), 1.6) * 1.4));
+  const trail = makeLine(pts, cols, 3);
+  atom.add(trail);
+  return { mesh, trail };
+});
+
+// Particles that spiral in from a wide shell to build the atom.
+const gather = (() => {
+  const n = 1600, start = new Float32Array(n * 3), end = new Float32Array(n * 3), delay = new Float32Array(n), hue = new Float32Array(n);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    const r = 9 + rand() * 7, th = rand() * Math.PI * 2, ph = Math.acos(2 * rand() - 1);
+    start.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th)], i * 3);
+    if (i < n * 0.3) {
+      const rr = Math.cbrt(rand()) * 0.45, t2 = rand() * 6.28, p2 = Math.acos(2 * rand() - 1);
+      v.set(rr * Math.sin(p2) * Math.cos(t2), rr * Math.cos(p2), rr * Math.sin(p2) * Math.sin(t2));
+      hue[i] = 1;
+    } else {
+      ringPoint(RINGS[i % 3], rand() * Math.PI * 2, v);
+      hue[i] = 0;
+    }
+    end.set([v.x, v.y, v.z], i * 3);
+    delay[i] = rand() * 0.35;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(end, 3));
+  g.setAttribute('aStart', new THREE.BufferAttribute(start, 3));
+  g.setAttribute('aDelay', new THREE.BufferAttribute(delay, 1));
+  g.setAttribute('aHue', new THREE.BufferAttribute(hue, 1));
+  const m = softPointMaterial({ uProgress: { value: 0 } }, /* glsl */`
+    uniform float uProgress, uScale; attribute vec3 aStart; attribute float aDelay, aHue;
+    varying vec3 vColor; varying float vAlpha;
+    void main() {
+      float p = clamp((uProgress - aDelay) / (1.0 - 0.35), 0.0, 1.0);
+      float e = 1.0 - pow(1.0 - p, 3.0);
+      float ang = (1.0 - e) * 2.4;
+      vec3 s = aStart;
+      vec3 swirl = vec3(s.x * cos(ang) - s.z * sin(ang), s.y, s.x * sin(ang) + s.z * cos(ang));
+      vec3 pos = mix(swirl, position, e);
+      vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = uScale * 0.12 / -mv.z * (1.0 + (1.0 - e) * 1.5);
+      vColor = mix(vec3(0.36, 0.62, 1.0), vec3(1.0, 0.72, 0.36), aHue) * 1.4;
+      vAlpha = 0.25 + 0.75 * e;
+    }`, SOFT_POINT_FRAG);
+  const p = new THREE.Points(g, m);
+  p.frustumCulled = false;
+  atom.add(p);
+  return { points: p, material: m };
+})();
+
+// ── Scene 2: a planet, a moon on a circular orbit, v and F ───────────────
+const orbit = new THREE.Group();
+scene.add(orbit);
+const ORBIT_R = 4.6;
+
+// A banded gas-giant surface, painted once on a canvas.
+const planetTexture = (() => {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 512;
+  const g = c.getContext('2d');
+  const bands = ['#1d3b78', '#2d5aa8', '#3f74c4', '#274f97', '#5b8fd8', '#2a4f8f', '#3a6cbb', '#1f417f'];
+  for (let y = 0; y < 512; y += 2) {
+    const k = Math.floor((y / 512) * bands.length * 3 + Math.sin(y * 0.05) * 1.5) % bands.length;
+    g.fillStyle = bands[(k + bands.length) % bands.length];
+    g.fillRect(0, y, 1024, 2);
+  }
+  g.globalAlpha = 0.08;
+  for (let i = 0; i < 900; i++) { g.fillStyle = rand() < 0.5 ? '#ffffff' : '#0b1a3a'; g.fillRect(rand() * 1024, rand() * 512, 30 + rand() * 120, 2 + rand() * 3); }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
+const planet = new THREE.Mesh(
+  new THREE.SphereGeometry(1.25, 64, 32),
+  new THREE.MeshStandardMaterial({ map: planetTexture, emissive: '#0c2552', emissiveIntensity: 0.35, roughness: 0.75, transparent: true })
+);
+planet.rotation.z = 0.35;
+orbit.add(planet);
+const atmosphere = new THREE.Mesh(
+  new THREE.SphereGeometry(1.3, 64, 32),
+  new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 1 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `uniform float uOpacity; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - max(dot(vN, vV), 0.0), 3.2); gl_FragColor = vec4(vec3(0.33,0.62,1.0)*f*0.75*uOpacity, 1.0); }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  })
+);
+orbit.add(atmosphere);
+
+const orbitRing = (() => {
+  const pts = [], cols = [];
+  for (let i = 0; i <= 256; i++) { const a = (i / 256) * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * ORBIT_R, 0, Math.sin(a) * ORBIT_R)); cols.push(new THREE.Color('#6f86b8').multiplyScalar(0.55)); }
+  const l = makeLine(pts, cols, 1.4);
+  orbit.add(l);
+  return l;
+})();
+
+const moon = new THREE.Mesh(new THREE.SphereGeometry(0.26, 32, 16),
+  new THREE.MeshStandardMaterial({ color: '#f5e6c8', emissive: '#f2b35b', emissiveIntensity: 0.45, roughness: 0.5, transparent: true }));
+orbit.add(moon);
+const moonTrail = makeLine(Array.from({ length: 70 }, () => new THREE.Vector3()),
+  Array.from({ length: 70 }, (_, i) => AMBER.clone().multiplyScalar(Math.pow(1 - i / 69, 1.8) * 0.9)), 2.6);
+orbit.add(moonTrail);
+
+function makeArrow(color) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.6), transparent: true });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1, 16), mat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.36, 24), mat);
+  g.add(shaft, head);
+  orbit.add(g);
+  return { group: g, shaft, head, mat };
+}
+const vArrow = makeArrow(CYAN);
+const fArrow = makeArrow(AMBER);
+const radius = makeLine([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)], [new THREE.Color('#9fb0d6').multiplyScalar(0.8), new THREE.Color('#9fb0d6').multiplyScalar(0.8)], 1.4);
+radius.material.dashed = true; radius.material.dashSize = 0.18; radius.material.gapSize = 0.14;
+orbit.add(radius);
+
+const UP = new THREE.Vector3(0, 1, 0);
+function placeArrow(arrow, from, dir, length) {
+  const shaftLen = Math.max(length - 0.36, 0.01);
+  arrow.group.position.copy(from);
+  arrow.group.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
+  arrow.shaft.scale.set(1, shaftLen, 1);
+  arrow.shaft.position.set(0, shaftLen / 2, 0);
+  arrow.head.position.set(0, shaftLen + 0.18, 0);
+}
+
+// ── Scene 3: two-source interference on a ripple surface ────────────────
+const waves = (() => {
+  const N = 190, size = 26, pos = new Float32Array(N * N * 3);
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    pos.set([(i / (N - 1) - 0.5) * size, 0, (j / (N - 1) - 0.5) * size], (i * N + j) * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = softPointMaterial({}, /* glsl */`
+    uniform float uTime, uScale; varying vec3 vColor; varying float vAlpha;
+    float src(vec2 p, vec2 s) { float r = length(p - s); return sin(2.3 * r - 3.4 * uTime) / sqrt(1.0 + 0.45 * r); }
+    void main() {
+      vec2 p = position.xz;
+      float h = 0.62 * (src(p, vec2(-1.5, -7.0)) + src(p, vec2(1.5, -7.0)));
+      vec3 pos = vec3(position.x, h, position.z);
+      vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = uScale * 0.05 / -mv.z * 2.2;
+      float k = clamp(h * 0.55 + 0.5, 0.0, 1.0);
+      vColor = mix(mix(vec3(0.10, 0.22, 0.62), vec3(0.35, 0.82, 1.0), smoothstep(0.2, 0.7, k)), vec3(1.0), smoothstep(0.78, 1.0, k)) * 1.25;
+      float edge = 1.0 - smoothstep(8.0, 13.0, length(p));
+      vAlpha = edge * (0.35 + 0.65 * k);
+    }`, SOFT_POINT_FRAG);
+  const p = new THREE.Points(g, m);
+  p.position.y = -1.2;
+  p.frustumCulled = false;
+  scene.add(p);
+  const sources = [-1.5, 1.5].map((x) => {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 12), new THREE.MeshBasicMaterial({ color: WHITE.clone().multiplyScalar(2), transparent: true }));
+    s.position.set(x, -0.9, -7);
+    scene.add(s);
+    return s;
+  });
+  return { points: p, material: m, sources };
+})();
+
+// ── Scene 4: electric field lines between + and − ────────────────────────
+const field = new THREE.Group();
+scene.add(field);
+const Q = [{ x: -2.4, q: 1 }, { x: 2.4, q: -1 }];
+
+function traceFieldLine(angle) {
+  const pts = [];
+  let x = Q[0].x + 0.42 * Math.cos(angle), y = 0.42 * Math.sin(angle);
+  for (let step = 0; step < 2400; step++) {
+    pts.push([x, y]);
+    let ex = 0, ey = 0;
+    for (const c of Q) { const dx = x - c.x, dy = y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2); ex += (c.q * dx) / (r2 * r); ey += (c.q * dy) / (r2 * r); }
+    const e = Math.hypot(ex, ey);
+    x += (ex / e) * 0.035; y += (ey / e) * 0.035;
+    if (Math.hypot(x - Q[1].x, y) < 0.4 || Math.hypot(x, y) > 16) { pts.push([x, y]); break; }
+  }
+  return pts;
+}
+
+const fieldLines = [];
+{
+  const ANGLES = [0.28, 0.62, 0.98, 1.36, 1.78, 2.24, 2.72];
+  const PLANES = 8;
+  for (let k = 0; k < PLANES; k++) {
+    const rot = (k / PLANES) * Math.PI * 2;
+    for (const a of ANGLES) {
+      const flat = traceFieldLine(a);
+      const pts = flat.map(([x, y]) => new THREE.Vector3(x, y * Math.cos(rot), y * Math.sin(rot)));
+      const cols = pts.map((_, i) => AMBER.clone().lerp(BLUE, i / (pts.length - 1)).multiplyScalar(0.42));
+      const line = makeLine(pts, cols, 1.4);
+      field.add(line);
+      // Cumulative arc length, for the particles that flow along each line.
+      const len = [0];
+      for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + pts[i].distanceTo(pts[i - 1]));
+      fieldLines.push({ line, pts, len, segments: pts.length - 1, offset: rand() });
+    }
+  }
+}
+const chargeMeshes = Q.map((c) => {
+  const col = c.q > 0 ? AMBER : BLUE;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.36, 40, 20),
+    new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.65, roughness: 0.3, transparent: true }));
+  m.position.set(c.x, 0, 0);
+  field.add(m);
+  return m;
+});
+const flow = (() => {
+  const per = 2, n = fieldLines.length * per;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const m = softPointMaterial({}, /* glsl */`
+    uniform float uScale; varying vec3 vColor; varying float vAlpha;
+    void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
+      gl_PointSize = uScale * 0.09 / -mv.z * 2.0; vColor = vec3(1.0, 0.95, 0.85) * 1.1; vAlpha = 1.0; }`, SOFT_POINT_FRAG);
+  const p = new THREE.Points(g, m);
+  p.frustumCulled = false;
+  field.add(p);
+  return { points: p, material: m, per };
+})();
+
+// ── Camera path: Catmull–Rom through timed keyframes ─────────────────────
+const KEYS = [
+  { t: 0.0, p: [0.0, 1.2, 19.0], l: [0, 0, 0] },
+  { t: 4.6, p: [2.2, 1.4, 10.8], l: [0, 0, 0] },
+  { t: 6.6, p: [0.8, 8.6, 12.4], l: [0, -0.2, 0] },
+  { t: 9.6, p: [-3.4, 6.2, 11.6], l: [0, 0, 0] },
+  { t: 11.6, p: [0.0, 3.0, 12.6], l: [0, -1.2, -1.5] },
+  { t: 14.0, p: [3.6, 2.2, 10.4], l: [0, -1.0, -2.0] },
+  { t: 15.6, p: [0.6, 0.8, 12.8], l: [0, 0, 0] },
+  { t: 17.6, p: [-1.2, 0.5, 11.2], l: [0, 0, 0] },
+  { t: 20.0, p: [0.0, 0.3, 13.5], l: [0, 0, 0] },
+].map((k) => ({ t: k.t, p: new THREE.Vector3(...k.p), l: new THREE.Vector3(...k.l) }));
+
+function hermite(t, prop) {
+  let i = 0;
+  while (i < KEYS.length - 2 && t > KEYS[i + 1].t) i++;
+  const k0 = KEYS[i], k1 = KEYS[i + 1];
+  const dt = k1.t - k0.t, s = clamp01((t - k0.t) / dt);
+  const tangent = (j) => {
+    if (j === 0 || j === KEYS.length - 1) return new THREE.Vector3();
+    return KEYS[j + 1][prop].clone().sub(KEYS[j - 1][prop]).divideScalar(KEYS[j + 1].t - KEYS[j - 1].t).multiplyScalar(dt);
+  };
+  const m0 = tangent(i), m1 = tangent(i + 1);
+  const s2 = s * s, s3 = s2 * s;
+  return k0[prop].clone().multiplyScalar(2 * s3 - 3 * s2 + 1)
+    .add(m0.multiplyScalar(s3 - 2 * s2 + s))
+    .add(k1[prop].clone().multiplyScalar(-2 * s3 + 3 * s2))
+    .add(m1.multiplyScalar(s3 - s2));
+}
+
+// ── Overlay helpers ──────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+function setCaption(id, t, a, b, c, d) {
+  const w = window4(t, a, b, c, d);
+  const inPhase = t < b;
+  const shift = inPhase ? (1 - w) * 2.4 : -(1 - w) * 1.6;
+  const el = $(id);
+  el.style.opacity = w.toFixed(3);
+  el.style.transform = `translateY(${shift.toFixed(3)}vh)`;
+  el.style.filter = `blur(${((1 - w) * 6).toFixed(2)}px)`;
+}
+function placeLabel(id, world, offset, opacity) {
+  const v = world.clone().project(camera);
+  const el = $(id);
+  el.style.left = `${((v.x * 0.5 + 0.5) * 100 + offset[0]).toFixed(3)}vw`;
+  el.style.top = `${((-v.y * 0.5 + 0.5) * 100 + offset[1]).toFixed(3)}vh`;
+  el.style.opacity = opacity.toFixed(3);
+}
+
+function setGroupOpacity(root, w) {
+  root.visible = w > 0.001;
+  root.traverse((o) => {
+    const m = o.material;
+    if (!m) return;
+    if (m.uniforms?.uOpacity) m.uniforms.uOpacity.value = w;
+    else m.opacity = w;
+  });
+}
+
+// ── The whole video as a function of time ────────────────────────────────
+const tmp = new THREE.Vector3();
+window.renderAt = (t) => {
+  // Scene weights.
+  const wAtom = window4(t, 0.0, 0.6, 4.9, 6.2);
+  const wOrbit = window4(t, 5.0, 6.4, 9.6, 10.9);
+  const wWave = window4(t, 9.9, 11.3, 13.7, 15.0);
+  const wField = window4(t, 14.0, 15.3, 16.9, 17.9);
+
+  // Camera.
+  camera.position.copy(hermite(t, 'p'));
+  camera.lookAt(hermite(t, 'l'));
+  camera.updateMatrixWorld();
+
+  // Dust.
+  dust.material.uniforms.uTime.value = t;
+  dust.points.rotation.y = t * 0.02;
+
+  // Atom: particles gather (0–2.6 s), rings and electrons appear.
+  setGroupOpacity(atom, wAtom);
+  const gatherP = smoother(t / 2.6);
+  gather.material.uniforms.uProgress.value = gatherP;
+  gather.material.uniforms.uOpacity.value = wAtom * (1 - smooth((t - 2.2) / 1.2)) * 0.9;
+  const ringsIn = smooth((t - 1.6) / 1.2);
+  ringLines.forEach((l) => (l.material.opacity = wAtom * ringsIn * 0.85));
+  atom.rotation.y = t * 0.16;
+  atom.rotation.x = 0.18 * Math.sin(t * 0.4);
+  nucleus.rotation.set(t * 0.5, t * 0.35, 0);
+  const pulse = 1 + 0.04 * Math.sin(t * 5.0);
+  nucleus.scale.setScalar(smooth((t - 0.8) / 1.4) * pulse);
+  electrons.forEach((e, i) => {
+    const ring = RINGS[i];
+    const th = ring.phase + ring.speed * t;
+    ringPoint(ring, th, e.mesh.position);
+    const pts = [];
+    for (let k = 0; k < TRAIL; k++) pts.push(...ringPoint(ring, th - k * 0.055, tmp).toArray());
+    e.trail.geometry.setPositions(pts);
+    const on = wAtom * ringsIn;
+    e.mesh.material.opacity = on;
+    e.trail.material.opacity = on;
+  });
+
+  // Orbit: the nucleus seems to swell into the planet.
+  setGroupOpacity(orbit, wOrbit);
+  const grow = smoother((t - 5.0) / 1.6);
+  planet.scale.setScalar(0.35 + 0.65 * grow);
+  atmosphere.scale.setScalar(0.35 + 0.65 * grow);
+  planet.rotation.y = t * 0.25 + 1.2;
+  const ringDraw = smooth((t - 5.6) / 1.4);
+  orbitRing.geometry.instanceCount = Math.max(1, Math.floor(256 * ringDraw));
+  const moonA = 0.8 + t * 0.62;
+  const mp = new THREE.Vector3(Math.cos(moonA) * ORBIT_R, 0, Math.sin(moonA) * ORBIT_R);
+  moon.position.copy(mp);
+  const trailPts = [];
+  for (let k = 0; k < 70; k++) { const a = moonA - k * 0.03; trailPts.push(Math.cos(a) * ORBIT_R, 0, Math.sin(a) * ORBIT_R); }
+  moonTrail.geometry.setPositions(trailPts);
+  const arrowsIn = smooth((t - 6.6) / 0.8) * wOrbit;
+  const vDir = new THREE.Vector3(-Math.sin(moonA), 0, Math.cos(moonA));
+  const fDir = mp.clone().multiplyScalar(-1).normalize();
+  placeArrow(vArrow, mp.clone().add(vDir.clone().multiplyScalar(0.3)), vDir, 1.9 * arrowsIn + 0.01);
+  placeArrow(fArrow, mp.clone().add(fDir.clone().multiplyScalar(0.3)), fDir, 1.5 * arrowsIn + 0.01);
+  vArrow.mat.opacity = arrowsIn; fArrow.mat.opacity = arrowsIn;
+  radius.geometry.setPositions([0, 0, 0, mp.x, mp.y, mp.z]);
+  radius.computeLineDistances();
+  radius.material.opacity = arrowsIn * 0.9;
+  orbit.updateMatrixWorld(true);
+  placeLabel('label-v', mp.clone().add(vDir.clone().multiplyScalar(2.45)), [0, -1.2], arrowsIn);
+  placeLabel('label-f', mp.clone().add(fDir.clone().multiplyScalar(1.35)), [0, -3.0], arrowsIn);
+  placeLabel('label-r', mp.clone().multiplyScalar(0.36), [0, 2.8], arrowsIn * 0.9);
+
+  // Waves.
+  waves.material.uniforms.uTime.value = t;
+  waves.material.uniforms.uOpacity.value = wWave;
+  waves.points.visible = wWave > 0.001;
+  waves.sources.forEach((s) => { s.visible = wWave > 0.001; s.material.opacity = wWave; s.scale.setScalar(1 + 0.25 * Math.sin(t * 3.4)); });
+
+  // Field lines draw out from + to −, then particles flow along them.
+  setGroupOpacity(field, wField);
+  const draw = smoother((t - 14.3) / 1.6);
+  for (const f of fieldLines) f.line.geometry.instanceCount = Math.max(1, Math.floor(f.segments * draw));
+  field.rotation.x = t * 0.18;
+  field.rotation.y = 0.25 * Math.sin(t * 0.3);
+  chargeMeshes.forEach((m, i) => m.scale.setScalar(smooth((t - 14.0) / 0.6) * (1 + 0.06 * Math.sin(t * 4 + i * 3))));
+  const fp = flow.points.geometry.attributes.position;
+  const flowOn = smooth((t - 15.4) / 0.8);
+  fieldLines.forEach((f, i) => {
+    for (let j = 0; j < flow.per; j++) {
+      const total = f.len[f.len.length - 1];
+      const s = (((t - 15.0) * 0.55 + f.offset + j / flow.per) % 1 + 1) % 1 * total;
+      let k = 1;
+      while (k < f.len.length - 1 && f.len[k] < s) k++;
+      const a = f.pts[k - 1], b = f.pts[k], u = (s - f.len[k - 1]) / Math.max(f.len[k] - f.len[k - 1], 1e-6);
+      tmp.copy(a).lerp(b, u);
+      fp.setXYZ(i * flow.per + j, tmp.x, tmp.y, tmp.z);
+    }
+  });
+  fp.needsUpdate = true;
+  flow.material.uniforms.uOpacity.value = wField * flowOn;
+
+  // Captions and end card.
+  setCaption('cap-atom', t, 1.7, 2.5, 4.4, 5.2);
+  setCaption('cap-orbit', t, 6.8, 7.6, 9.3, 10.1);
+  setCaption('cap-wave', t, 11.3, 12.1, 13.5, 14.3);
+  setCaption('cap-field', t, 15.3, 16.0, 16.9, 17.6);
+  const wEnd = window4(t, 17.6, 18.5, 19.4, 19.95);
+  const end = $('endcard');
+  end.style.opacity = wEnd.toFixed(3);
+  end.style.transform = `scale(${(0.97 + 0.03 * smooth((t - 17.6) / 1.6)).toFixed(4)})`;
+  end.style.filter = `blur(${((1 - smooth((t - 17.6) / 0.9)) * 8).toFixed(2)}px)`;
+
+  // Fade from and to the background, so the loop joins invisibly.
+  $('fade').style.opacity = (1 - smooth(t / 0.6)).toFixed(3);
+
+  bloom.strength = 0.85 - 0.3 * wField - 0.15 * wOrbit;
+  composer.render();
+};
+
+await document.fonts.ready;
+await new Promise((resolve) => { const img = document.querySelector('#endcard img'); img.complete ? resolve() : (img.onload = resolve); });
+window.DURATION = DURATION;
+window.renderAt(0);
+window.sceneReady = true;
+</script>
+</body>
+</html>

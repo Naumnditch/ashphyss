@@ -2831,3 +2831,34 @@ break a line after, so "m/s²" never splits as "m/" + "s²".
   questions to "not tried".
 - Skipping does not touch the mastery streak, which is still derived from
   attempts only.
+
+## Homepage hero film, made with Three.js (2026-09-23)
+
+A 20-second, 1920×1080, 30 fps looping film under the homepage hero:
+"Every atom. / Every orbit. / Every wave. / Every field." and an AshPhys end
+card ("Physics, made visible." · Lessons · Simulations · Practice ·
+ashphys.org). Each beat is real physics: electrons on elliptical orbits; a
+moon on a circular orbit with its velocity, centripetal force and radius
+labelled (F = mv²/r); two-source interference on a ripple surface (v = fλ);
+numerically traced field lines between + and − charges (F = kq₁q₂/r²).
+
+- **Source:** `video/hero/scene.html` (Three.js r180, bloom, Inter captions as
+  HTML over the canvas). The whole film is a pure function of time,
+  `window.renderAt(t)`, with a seeded RNG, so every render is identical.
+- **Rendering:** `video/hero/render.mjs` drives headless Chromium, screenshots
+  each frame, pipes them into ffmpeg, and writes
+  `public/video/ashphys-hero.{webm,mp4}` plus `ashphys-hero-poster.jpg`.
+  `node render.mjs --stills 3.2,8.6 --out /tmp/x` dumps review stills.
+  `video/hero` has its **own package.json** (three, playwright-core,
+  ffmpeg-static, Inter) so none of it is installed with the site or on Vercel.
+  To re-render: `cd video/hero && npm install && npm run render` (needs a
+  Playwright Chromium: `npx playwright install chromium`). A full render takes
+  about 15 minutes with software WebGL; `--encode-only` re-encodes the web
+  files from the last 1080p master in under a minute.
+- **Files shipped:** 1280×720 MP4 (H.264, 3.6 MB) and WebM (VP9, 3.9 MB) plus
+  a 48 KB poster. The frames are rendered at 1080p; 720p is plenty at the
+  ~1000 px the homepage shows it and roughly quarters the size.
+- **On the page:** `components/home/HeroVideo.tsx` — muted, looping,
+  `playsInline`, WebM with MP4 fallback, poster frame, a pause/play button
+  (WCAG 2.2.2), no autoplay under `prefers-reduced-motion` (a big play button
+  instead), and it pauses while scrolled out of view.

@@ -4,6 +4,7 @@ import { Reveal } from '@/components/home/Reveal';
 import { AnimatedCounter } from '@/components/home/AnimatedCounter';
 import { PhysicsBackground } from '@/components/home/PhysicsBackground';
 import { FloatingFormulas } from '@/components/home/FloatingFormulas';
+import { HeroVideo } from '@/components/home/HeroVideo';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,6 +149,10 @@ export default async function HomePage() {
           >
             Free forever for the core curriculum. No credit card needed.
           </p>
+        </div>
+
+        <div className="relative max-w-5xl mx-auto px-4 pb-16 animate-fade-in-up" style={{ animationDelay: '360ms' }}>
+          <HeroVideo />
         </div>
       </section>
 
