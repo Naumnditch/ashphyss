@@ -2862,3 +2862,59 @@ numerically traced field lines between + and − charges (F = kq₁q₂/r²).
   `playsInline`, WebM with MP4 fallback, poster frame, a pause/play button
   (WCAG 2.2.2), no autoplay under `prefers-reduced-motion` (a big play button
   instead), and it pauses while scrolled out of view.
+
+## Three.js simulations: Circular Motion Lab and Coulomb's Law Lab (2026-09-23)
+
+The first two simulations built in 3D with Three.js (r180, now a site
+dependency). Both are free (`required_tier` 0) and linked from their lessons.
+
+- **Circular Motion Lab** — `/simulations/circular-motion`, topic 3.7.
+  Three modes: *horizontal circle* (mass on a frictionless table round a peg),
+  *vertical circle* (constant speed, as the questions assume; the path is
+  shaded by tension, and below √(gr) the string goes slack near the top and
+  the mass really falls inside the circle until the string snaps taut again),
+  and *conical pendulum* (cone, h, r and θ drawn; “Resolve T” splits the
+  tension into T cos θ and T sin θ). Arrows for T, mg, N, v and the resultant,
+  all forces on one scale. “Cut the string” lets the mass go: along the
+  tangent at steady speed on the table, or as a projectile otherwise, with the
+  landing distance reported. Slow motion (½×, ¼×), 3D/side/top views, and a
+  tension-round-the-loop graph for the vertical circle. Presets load every
+  3.7 practice-question setup.
+- **Coulomb's Law Lab** — `/simulations/coulombs-law`, topic 17.4.
+  *Two charges*: q₁, q₂ (nC/µC/mC) and r; equal-and-opposite force arrows,
+  one-click experiments (double r → × 0.25, double q₁, flip a sign) with the
+  ratio spelled out, the substitution into kq₁q₂/r², and an F–r graph.
+  *Three charges*: drag charges (snapped to half a grid square), pick which
+  charge the forces act on, parallelogram construction, and a table of each
+  force's r, F, Fx and Fy with the sums. Field lines (off / in the plane /
+  all round in 3D) are traced numerically, with arrowheads. Presets load all
+  six 17.4 net-force arrangements and five of the two-charge questions (the
+  electron–proton and 0.017 m ones are outside the lab's range).
+
+### How it is built
+
+- `lib/physics/circularMotion.ts`, `lib/physics/coulomb.ts` — pure physics,
+  tested against the stored answers of the practice questions
+  (`lib/physics/__tests__/physics.test.ts`); `lib/physics/format.ts` — `sci()`
+  standard-form formatting shared by both labs.
+- `components/simulations/three/stage.ts` — shared plumbing for every 3D lab:
+  renderer on the labs' paper colour, OrbitControls, CSS2D labels, soft
+  shadows, a loop that stops while the canvas is off-screen, `fitPoints()`
+  (frames a set of points exactly, with extra room on phones), a camera glide
+  timed by the wall clock, `layoutLabels()` (puts each label beyond its
+  arrow's tip on screen and pushes overlapping labels apart), `Arrow3D`,
+  `Segment` (strings, rods) and `FatLine` (pixel-width lines whose buffers
+  are rewritten in place — `LineGeometry.setPositions` allocates new GPU
+  buffers every call, so never call it per frame).
+- `components/simulations/circular/CircularScene.ts`,
+  `components/simulations/coulomb/CoulombScene.ts` — the scenes. The React
+  components (`CircularMotionLab.tsx`, `CoulombLab.tsx`) own all state and
+  `import()` their scene inside `useEffect`, so three.js never runs on the
+  server and only loads on these two pages.
+- DB rows: `database/seeds/2026-09-23-3d-simulations.sql` (idempotent).
+
+### Next
+
+Other simulations can move to 3D on the same stage; the best candidates are
+the ones whose physics is naturally three-dimensional (gas in a box, ripple
+tank surface, optics bench, pressure in liquids, pendulum).
