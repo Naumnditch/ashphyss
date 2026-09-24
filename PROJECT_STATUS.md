@@ -2918,3 +2918,50 @@ dependency). Both are free (`required_tier` 0) and linked from their lessons.
 Other simulations can move to 3D on the same stage; the best candidates are
 the ones whose physics is naturally three-dimensional (gas in a box, ripple
 tank surface, optics bench, pressure in liquids, pendulum).
+
+## Equation Rearranger rebuilt as a Manim-style lesson film (2026-09-24)
+
+`/simulations/equation-rearranger` now plays like a 3Blue1Brown video that
+the student steers. The algebra (isolateSteps / buildIntermediate and the
+20-equation bank) is unchanged, moved to
+`components/simulations/rearranger/algebra.ts`.
+
+- **Look:** dark 16:9 stage; equations typeset by MathJax (Computer Modern,
+  as in Manim) and drawn as real glyph outlines with three.js; Manim's
+  palette, one colour per variable, the target in yellow, constants grey.
+- **Each step:** the caption is written ("Divide both sides by m"); the
+  operation appears on both sides (TransformMatchingTex: existing symbols
+  glide, new ones rise in, fraction bars grow); the new pieces flash; the
+  cancelling pieces flash red and are struck through with the reason
+  (m/m = 1, +u − u = 0, √(v²) = v); they shrink away and the rest settles.
+  Swapping sides moves along an arc; the answer gets SurroundingRectangle,
+  Flash and "Solved for m". The camera zooms out for wide or tall equations.
+- **Player:** Play (runs the whole derivation), Pause (freezes mid-move),
+  previous/next step, a chapter timeline and step list (click to jump),
+  speed 0.5–2×, full screen; Space / ← → / F on the keyboard. Hovering a
+  variable shows its name and unit; clicking it solves for it (chained
+  solves continue from what is on screen). Reduced motion plays at 2×.
+- **reveal.js** still drives navigation: each step is a fragment. RevealDeck
+  is now imported directly — `next/dynamic` did not forward its ref, so the
+  imperative handle (Next/Back buttons) was null before.
+
+### Code
+
+- `lib/manim/` — a small Manim port: `rate.ts` (Manim's rate functions,
+  line for line), `colors.ts`, `tex.ts` (MathJax → glyph outlines with
+  their `\class{}` tags; runs in Node too), `mobject.ts` (Glyph, TexMob,
+  Stroke with partial drawing), `animation.ts` (Write, FadeIn/Out,
+  TransformMatching, Indicate, Recolor, Create, ShowPassingFlash, Flash
+  lines, MoveFrame, Group/LaggedStart), `scene.ts` (renderer, moving camera
+  frame, fixed caption layer, play/finishAll/pause/speed; renders only while
+  something moves).
+- `components/simulations/rearranger/` — `texFromState.ts` (equation → TeX
+  with slot-key tags matching buildIntermediate's cancel keys),
+  `captions.ts`, `RearrangerScene.ts` (the choreography), `palette.ts`.
+- Tests: `components/simulations/rearranger/__tests__/typesetting.test.ts`
+  typesets every state, caption and title over every equation × variable ×
+  orientation × chained pair, and checks every cancel key exists as glyphs;
+  `lib/manim/__tests__/tex.test.ts` checks the rate functions and layout.
+- Removed the old DOM FLIP renderer (`lib/equation-stage/render.ts`,
+  `types.ts`, `mk.ts`); the glossary and its overlay remain.
+- New dependency: `mathjax-full` 3.2.2 (loaded lazily on this page only).

@@ -6,14 +6,15 @@
  * state machine (which slide, which fragment, keyboard/back/next
  * plumbing); it draws none of the visible content itself. Every section
  * this deck renders is expected to hold its OWN visible content (built by
- * whatever engine the caller supplies, e.g. lib/equation-stage's FLIP
- * renderer) plus a set of zero-size `.fragment` placeholder elements that
+ * whatever engine the caller supplies, e.g. the Equation Rearranger's
+ * three.js stage) plus a set of zero-size `.fragment` placeholder elements that
  * exist only so reveal.js has something to count/index — see
  * reveal-deck-scope.css, which strips reveal.js's own fragment
  * opacity/transform animation for exactly that reason.
  *
- * Import this component via `next/dynamic` with `ssr: false` at the call
- * site — reveal.js touches `document` and must never evaluate server-side.
+ * reveal.js itself is only imported inside an effect, so this component is
+ * safe to import normally (and should be: `next/dynamic` does not forward
+ * refs, which would leave the imperative handle null).
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback } from 'react';
@@ -53,6 +54,8 @@ export interface RevealDeckHandle {
   prev: () => void;
   /** Jumps to a section with no fragment revealed, e.g. after picking a different item from a list. */
   goToSlide: (slideIndex: number) => void;
+  /** Jumps straight to a fragment (-1 for none revealed), e.g. from a timeline. */
+  goTo: (slideIndex: number, fragmentIndex: number) => void;
   /**
    * Re-scans one section's `.fragment` children after the caller has
    * mutated them (a new derivation for that section has a different
@@ -113,8 +116,8 @@ export const RevealDeck = forwardRef<RevealDeckHandle, RevealDeckProps>(function
         help: false,
         center: false,
         touch: false,
-        // We drive the visible content ourselves (lib/equation-stage's
-        // FLIP renderer); reveal.js's own slide-change transition would
+        // We drive the visible content ourselves (the lesson's own
+        // renderer); reveal.js's own slide-change transition would
         // otherwise fight that when jumping between sections.
         transition: 'none',
         // Disables reveal.js's scale/center presentation layout (a fixed
@@ -162,6 +165,10 @@ export const RevealDeck = forwardRef<RevealDeckHandle, RevealDeckProps>(function
       },
       goToSlide: (slideIndex: number) => {
         deckRef.current?.slide(slideIndex);
+        sync();
+      },
+      goTo: (slideIndex: number, fragmentIndex: number) => {
+        deckRef.current?.slide(slideIndex, 0, fragmentIndex);
         sync();
       },
       syncFragments: (slideIndex: number) => {

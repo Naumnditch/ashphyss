@@ -14,6 +14,7 @@ export function useRevealDeck() {
   const prev = useCallback(() => ref.current?.prev(), []);
   const goToSlide = useCallback((slideIndex: number) => ref.current?.goToSlide(slideIndex), []);
   const syncFragments = useCallback((slideIndex: number) => ref.current?.syncFragments(slideIndex), []);
+  const goTo = useCallback((slideIndex: number, fragmentIndex: number) => ref.current?.goTo(slideIndex, fragmentIndex), []);
 
-  return { ref, state, onStateChange: setState, next, prev, goToSlide, syncFragments };
+  return { ref, state, onStateChange: setState, next, prev, goToSlide, goTo, syncFragments };
 }
