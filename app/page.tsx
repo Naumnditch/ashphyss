@@ -6,6 +6,7 @@ import { PhysicsBackground } from '@/components/home/PhysicsBackground';
 import { FloatingFormulas } from '@/components/home/FloatingFormulas';
 import { HeroVideo } from '@/components/home/HeroVideo';
 import { AnnouncementsFeed } from '@/components/announcements/AnnouncementsFeed';
+import { AnnouncementTicker } from '@/components/announcements/AnnouncementTicker';
 import { SAMPLE_ANNOUNCEMENTS } from '@/lib/announcements/sampleAnnouncements';
 
 export const dynamic = 'force-dynamic';
@@ -106,6 +107,9 @@ export default async function HomePage() {
         <FloatingFormulas />
 
         <div className="relative text-center max-w-3xl mx-auto px-4 pt-16 pb-14">
+          <div className="flex justify-center mb-4 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+            <AnnouncementTicker announcements={SAMPLE_ANNOUNCEMENTS} now={Date.now()} />
+          </div>
           <div
             className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5 text-xs font-semibold text-gray-600 mb-6 animate-fade-in-up"
             style={{ animationDelay: '0ms' }}
@@ -254,7 +258,7 @@ export default async function HomePage() {
       </section>
 
       {/* ---------- What's new ---------- */}
-      <section className="border-t border-gray-100 py-16" aria-labelledby="whats-new">
+      <section id="whats-new-section" className="border-t border-gray-100 py-16 scroll-mt-20" aria-labelledby="whats-new">
         <div className="max-w-3xl mx-auto px-4">
           <Reveal className="text-center mb-8">
             <h2 id="whats-new" className="text-2xl font-bold text-gray-900 mb-2">What&rsquo;s New</h2>
