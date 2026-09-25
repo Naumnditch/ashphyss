@@ -55,6 +55,12 @@ body {
   animation: fadeInUp 0.8s ease-out both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up {
+    animation: none;
+  }
+}
+
 .animate-float-slow {
   animation: floatSlow 9s ease-in-out infinite;
 }

@@ -5,6 +5,8 @@ import { AnimatedCounter } from '@/components/home/AnimatedCounter';
 import { PhysicsBackground } from '@/components/home/PhysicsBackground';
 import { FloatingFormulas } from '@/components/home/FloatingFormulas';
 import { HeroVideo } from '@/components/home/HeroVideo';
+import { AnnouncementsFeed } from '@/components/announcements/AnnouncementsFeed';
+import { SAMPLE_ANNOUNCEMENTS } from '@/lib/announcements/sampleAnnouncements';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,7 +153,7 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <div className="relative max-w-5xl mx-auto px-4 pb-16 animate-fade-in-up" style={{ animationDelay: '360ms' }}>
+        <div id="film" className="relative max-w-5xl mx-auto px-4 pb-16 animate-fade-in-up scroll-mt-24" style={{ animationDelay: '360ms' }}>
           <HeroVideo />
         </div>
       </section>
@@ -248,6 +250,17 @@ export default async function HomePage() {
               </Link>
             </Reveal>
           ))}
+        </div>
+      </section>
+
+      {/* ---------- What's new ---------- */}
+      <section className="border-t border-gray-100 py-16" aria-labelledby="whats-new">
+        <div className="max-w-3xl mx-auto px-4">
+          <Reveal className="text-center mb-8">
+            <h2 id="whats-new" className="text-2xl font-bold text-gray-900 mb-2">What&rsquo;s New</h2>
+            <p className="text-gray-500 max-w-lg mx-auto">New lessons, simulations, practice and videos, as they land.</p>
+          </Reveal>
+          <AnnouncementsFeed announcements={SAMPLE_ANNOUNCEMENTS} initialCount={5} step={3} viewAllHref="/updates" now={Date.now()} />
         </div>
       </section>
 

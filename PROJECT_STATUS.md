@@ -2965,3 +2965,25 @@ the student steers. The algebra (isolateSteps / buildIntermediate and the
 - Removed the old DOM FLIP renderer (`lib/equation-stage/render.ts`,
   `types.ts`, `mk.ts`); the glossary and its overlay remain.
 - New dependency: `mathjax-full` 3.2.2 (loaded lazily on this page only).
+
+## Homepage "What's New" feed (2026-09-25)
+
+A timeline of recent releases on the homepage (after "See It In Action")
+and in full at `/updates`.
+
+- `components/announcements/AnnouncementsFeed.tsx` — reusable: takes an
+  `announcements` array; newest first; colour and icon per type (lesson
+  blue, video rose, simulation teal, practice amber, platform violet);
+  New/Updated badge; "Yesterday / 3 days ago" within a week, else
+  "25 Sep 2026" (full date on hover); two-line clamp; type filter chips
+  with counts; "Show N more" and a "View all updates" link; staggered
+  fade-in (off under reduced motion). Pass `now` from the server so
+  relative dates match between server and browser.
+- `lib/announcements/` — `types.ts`, `format.ts` (date formatting and
+  sorting, tested), `sampleAnnouncements.ts`.
+- **The feed is a hand-kept list for now**: `sampleAnnouncements.ts` holds
+  this week's real releases with real links. To announce something, add an
+  entry there (newest anywhere; it sorts itself). Moving it to a database
+  table with an admin form is the natural next step.
+- The homepage hero film now has `id="film"` so the video announcement can
+  link to it.
