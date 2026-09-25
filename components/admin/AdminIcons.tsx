@@ -117,6 +117,12 @@ const PATHS: Record<string, React.ReactNode> = {
       <rect x="18" y="9" width="4" height="11" rx="1" />
     </>
   ),
+  messages: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
+    </>
+  ),
   menu: (
     <>
       <path d="M4 6h16" />

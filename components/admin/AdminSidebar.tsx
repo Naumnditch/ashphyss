@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { AdminIcon, type AdminIconName } from '@/components/admin/AdminIcons';
 import { LogoutButton } from '@/components/LogoutButton';
 import type { PendingCounts } from '@/lib/admin/overview';
+import { useUnreadCount } from '@/components/messages/useUnreadCount';
 
 interface NavItem {
   href: string;
@@ -25,6 +26,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: 'People',
     items: [
+      { href: '/admin/messages', label: 'Messages', icon: 'messages', pending: 'unreadMessages' },
       { href: '/admin/users', label: 'Users', icon: 'users' },
       { href: '/admin/teacher-applications', label: 'Teacher applications', icon: 'applications', pending: 'teacherApplications' },
       { href: '/admin/sections', label: 'Sections', icon: 'sections' },
@@ -64,6 +66,9 @@ function isActive(pathname: string, href: string) {
 export function AdminSidebar({ name, pending }: { name: string; pending: PendingCounts }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // The messages badge stays live without a page load.
+  const unreadMessages = useUnreadCount(pending.unreadMessages, 60_000);
+  const counts: PendingCounts = { ...pending, unreadMessages };
   const current = NAV_GROUPS.flatMap((g) => g.items).find((item) => isActive(pathname, item.href));
 
   // Close the phone drawer after navigating.
@@ -77,7 +82,7 @@ export function AdminSidebar({ name, pending }: { name: string; pending: Pending
           <ul className="space-y-0.5">
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
-              const count = item.pending ? pending[item.pending] : 0;
+              const count = item.pending ? counts[item.pending] : 0;
               return (
                 <li key={item.href}>
                   <Link

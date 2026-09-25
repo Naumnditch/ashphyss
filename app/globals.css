@@ -118,3 +118,16 @@ body {
 .animate-spin-slower { animation: spinSlow 34s linear infinite reverse; }
 
 
+
+/* Mailbox: formatted message bodies and the rich text editor. */
+.message-body { overflow-wrap: anywhere; }
+.message-body p, .message-body div { margin: 0 0 0.6em; }
+.message-body > :last-child { margin-bottom: 0; }
+.message-body ul { list-style: disc; padding-left: 1.3em; margin: 0 0 0.6em; }
+.message-body ol { list-style: decimal; padding-left: 1.3em; margin: 0 0 0.6em; }
+.message-body li { margin: 0.15em 0; }
+.message-body a { color: #1d4ed8; text-decoration: underline; text-underline-offset: 2px; }
+.message-body blockquote { border-left: 3px solid #d4d4d4; padding-left: 0.8em; color: #525252; margin: 0 0 0.6em; }
+.message-body h3 { font-size: 1.05em; font-weight: 600; margin: 0 0 0.4em; }
+.message-body hr { border: 0; border-top: 1px solid #e5e5e5; margin: 0.8em 0; }
+.rich-editor:empty::before { content: attr(data-placeholder); color: #a3a3a3; pointer-events: none; }

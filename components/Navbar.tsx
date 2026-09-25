@@ -5,6 +5,7 @@ import { CurriculumDropdown } from './CurriculumDropdown';
 import { NavDropdown } from './NavDropdown';
 import { SearchBar } from './SearchBar';
 import { getCurrentUser } from '@/lib/auth/session';
+import { MessagesNavLink } from './messages/MessagesNavLink';
 
 async function getChapters() {
   try {
@@ -42,7 +43,7 @@ export async function Navbar() {
             />
           </Link>
         </div>
-        <nav className="flex items-center gap-4 sm:gap-5">
+        <nav className="flex items-center gap-2 sm:gap-5">
           <div className="hidden lg:block"><CurriculumDropdown chapters={chapters} /></div>
 
           <div className="hidden lg:block">
@@ -89,9 +90,12 @@ export async function Navbar() {
 
           <SearchBar />
           {user ? (
-            <Link className="btn btn-primary text-sm whitespace-nowrap" href={dashboardHref(user)}>
-              {user.role === 'admin' ? 'Admin' : 'Dashboard'}
-            </Link>
+            <>
+              <MessagesNavLink href={user.role === 'admin' ? '/admin/messages' : '/dashboard/messages'} />
+              <Link className="btn btn-primary text-sm whitespace-nowrap" href={dashboardHref(user)}>
+                {user.role === 'admin' ? 'Admin' : 'Dashboard'}
+              </Link>
+            </>
           ) : (
             <>
               <Link className="text-sm hover:underline text-blue-600 font-medium whitespace-nowrap" href="/auth/login">Sign In</Link>

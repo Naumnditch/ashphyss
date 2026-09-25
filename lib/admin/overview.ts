@@ -11,6 +11,7 @@ export interface PendingCounts {
   paymentReceipts: number;
   videoRequests: number;
   tutoringToSchedule: number;
+  unreadMessages: number;
 }
 
 export interface DailyPoint {
@@ -39,7 +40,8 @@ export async function getPendingCounts(): Promise<PendingCounts> {
       (SELECT COUNT(*) FROM users WHERE role = 'teacher' AND status = 'inactive') AS teacher_applications,
       (SELECT COUNT(*) FROM payment_requests WHERE status = 'pending') AS payment_receipts,
       (SELECT COUNT(*) FROM video_requests WHERE status = 'open') AS video_requests,
-      (SELECT COUNT(*) FROM addon_purchases WHERE status = 'paid') AS tutoring_to_schedule
+      (SELECT COUNT(*) FROM addon_purchases WHERE status = 'paid') AS tutoring_to_schedule,
+      (SELECT COUNT(*) FROM messages WHERE direction = 'inbound' AND read_at IS NULL) AS unread_messages
   `);
   const r = res.rows[0];
   return {
@@ -47,6 +49,7 @@ export async function getPendingCounts(): Promise<PendingCounts> {
     paymentReceipts: Number(r.payment_receipts),
     videoRequests: Number(r.video_requests),
     tutoringToSchedule: Number(r.tutoring_to_schedule),
+    unreadMessages: Number(r.unread_messages),
   };
 }
 

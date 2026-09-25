@@ -58,6 +58,21 @@ export default function DashboardPage() {
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col justify-between">
           <div>
+            <h2 className="text-xl font-semibold mb-1">✉️ Messages</h2>
+            <p className="text-gray-600 text-sm">
+              Read messages from the AshPhys team and ask us anything.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/messages"
+            className="bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded font-medium mt-4 text-center"
+          >
+            Open Messages
+          </Link>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col justify-between">
+          <div>
             <h2 className="text-xl font-semibold mb-1">📖 Browse the Curriculum</h2>
             <p className="text-gray-600 text-sm">
               See all 25 chapters and pick what you want to study.

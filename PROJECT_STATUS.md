@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-16 (First-party analytics: analytics_events table, site-wide event tracking, /admin/analytics dashboard — plus the pricing restructure and session/device-limit auth system below, all three awaiting the same JWT_SECRET confirmation before push, see that entry)
+Last updated: 2026-09-25 (Messaging / mailbox: admin mailbox, student inbox, bulk sends, templates, drafts, email via Resend/SendGrid/SMTP with reply sync and unsubscribe; see the last entry)
 
 ---
 
@@ -2987,3 +2987,73 @@ and in full at `/updates`.
   table with an admin form is the natural next step.
 - The homepage hero film now has `id="film"` so the video announcement can
   link to it.
+
+## Messaging / mailbox (2026-09-25)
+
+One conversation per subscriber with the AshPhys team, delivered on-site
+always and by email when a provider is configured.
+
+- **Admin mailbox**: `/admin/messages` (sidebar: People → Messages, with a
+  live unread badge; also a "Unread messages" card on the overview).
+  `/dashboard/messages` redirects admins there. Conversation list with
+  search (name, email, message text), All / Unread / Received / Sent tabs,
+  Drafts and Bulk history; thread view with the subscriber's plan, class
+  and email status, All/Sent/Received toggle, read receipts ("Read",
+  "Opened in email", "Emailed", "Delivered on AshPhys", "Email failed");
+  reply box with rich text, templates and `{{placeholders}}`. Polls every
+  20 s. Works one pane at a time on phones.
+- **Compose** (`ComposeModal`): pick people by name/email; each gets their
+  own copy in their own thread. **Bulk** (`BulkSendModal`): filters for
+  students/teachers, plan (Free/Plus/Pro), class (or none), course
+  enrollment (any / specific / none), joined within N days, subscription
+  ending within N days, account status, email opt-in; live count and
+  sample; confirm step with a personalised preview; the server refuses to
+  send if the match count changed since the preview.
+- **Drafts** autosave (compose, bulk, and per-thread replies).
+  **Templates**: 8 seeded (welcome, enrollment confirmation, course
+  reminder, payment received, renewal reminder, video ready, tutoring
+  booked, exam prep); save/delete your own.
+- **Student inbox**: `/dashboard/messages` (card on the student dashboard,
+  envelope + unread badge in the navbar for every signed-in user). Plain
+  text replies (20/hour limit), "Also email me new messages" toggle.
+- **Email** (`lib/messaging/`): `config.ts` picks Resend, SendGrid or
+  SMTP/Nodemailer from env vars; `mailer.ts` sends; `emailLayout.ts` wraps
+  every email with an "Open in AshPhys" button and a CAN-SPAM footer
+  (reason, unsubscribe link, `MAIL_POSTAL_ADDRESS`), plus
+  `List-Unsubscribe` + one-click `List-Unsubscribe-Post` headers and a
+  signed open-tracking pixel. `lib/email.ts` (password resets) now goes
+  through the same provider switch.
+- **Replies by email**: Reply-To is `MAIL_REPLY_TO` plus-addressed with the
+  thread's token (`messages+<token>@…`). `POST /api/messages/inbound?secret=`
+  accepts SendGrid Inbound Parse, Mailgun, Postmark or plain JSON; strips
+  quoted history; files the reply in the thread if the sender is that
+  subscriber; if the sender is an admin (replying to a "new message"
+  alert) it is sent to the subscriber instead; other senders are ignored.
+  Admins get an alert email for every student message (`ADMIN_NOTIFY_EMAIL`
+  or all admins).
+- **Unsubscribe**: `/unsubscribe?token=` page (confirm button, resubscribe)
+  and `POST /api/unsubscribe` (also one-click). Unsubscribed people still
+  get messages on-site, never by email.
+- **API**: `POST /api/messages/send`, `GET /api/messages/inbox`,
+  `GET /api/messages/thread/:subscriberId`, `PUT /api/messages/:id/read`,
+  `GET /api/subscribers/search`, `POST|GET /api/messages/bulk-send`,
+  `/api/messages/drafts[/:id]`, `/api/messages/templates[/:id]`,
+  `GET /api/messages/unread-count`, `GET|PUT /api/messages/preferences`,
+  `GET /api/messages/open/:id`, `POST /api/messages/inbound`,
+  `POST /api/unsubscribe`.
+- **Schema** (migration `messaging_mailbox`, file
+  `database/seeds/2026-09-25-messaging.sql`): `message_threads` (one per
+  subscriber, `reply_token`), `messages` (direction, channel, subject,
+  sanitized HTML body + text, read_at, email_status/error/opened_at,
+  bulk_send_id), `message_drafts`, `message_templates`, `bulk_sends`;
+  `users.email_notifications`, `unsubscribe_token`, `unsubscribed_at`.
+  RLS on, no policies (the app uses the direct Postgres connection).
+- Admin HTML is sanitized server-side (`sanitize-html` allowlist); student
+  text is escaped. Tests: `lib/messaging/__tests__` (15). Verified end to
+  end against a local Postgres 16 copy of the schema with an SMTP sink.
+- **To turn on email in production** (none of these are set yet): a
+  provider key (`RESEND_API_KEY`, or `SENDGRID_API_KEY`, or
+  `SMTP_HOST/PORT/USER/PASS`), `MAIL_FROM` on a verified domain,
+  `MAIL_POSTAL_ADDRESS`; for reply sync also `MAIL_REPLY_TO` +
+  `MAIL_INBOUND_SECRET` and an inbound-parse route to the webhook. See
+  `.env.example`.

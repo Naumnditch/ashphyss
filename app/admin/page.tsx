@@ -21,6 +21,7 @@ export default async function AdminOverviewPage() {
     { label: 'Payment receipts', count: pending.paymentReceipts, href: '/admin/payment-requests', icon: 'receipts', action: 'Check' },
     { label: 'Video requests', count: pending.videoRequests, href: '/admin/video-requests', icon: 'video', action: 'Answer' },
     { label: 'Tutoring to schedule', count: pending.tutoringToSchedule, href: '/admin/tutoring-bookings', icon: 'tutoring', action: 'Schedule' },
+    { label: 'Unread messages', count: pending.unreadMessages, href: '/admin/messages?tab=unread', icon: 'messages', action: 'Reply' },
   ];
   const waiting = attention.reduce((sum, a) => sum + a.count, 0);
 
@@ -43,7 +44,7 @@ export default async function AdminOverviewPage() {
         <h2 id="attention-heading" className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
           Needs your attention
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {attention.map((item) => {
             const due = item.count > 0;
             return (

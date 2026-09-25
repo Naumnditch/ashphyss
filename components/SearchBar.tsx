@@ -90,7 +90,7 @@ export function SearchBar() {
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => setOpen(true)}
           placeholder="Search the site…"
-          className="text-sm border border-gray-300 rounded-full pl-8 pr-3 py-1.5 w-40 sm:w-56 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:w-64 transition-all"
+          className="text-sm border border-gray-300 rounded-full pl-8 pr-3 py-1.5 w-32 sm:w-56 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:w-64 transition-all"
         />
       </div>
 
