@@ -49,10 +49,25 @@ export function StudentInbox({ firstName, initialEmailNotifications }: { firstNa
     return () => clearInterval(t);
   }, [load]);
 
+  const hashHandled = useRef(false);
   useEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages?.length]);
+    if (!el || !messages) return;
+    // Opened from an email's "View in AshPhys" link: show that message.
+    if (!hashHandled.current && messages.length) {
+      hashHandled.current = true;
+      const target = window.location.hash.startsWith('#m-') ? document.getElementById(window.location.hash.slice(1)) : null;
+      if (target) {
+        stick.current = false;
+        el.scrollTop += target.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+        const bubble = target.querySelector('.rounded-2xl') ?? target;
+        bubble.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2');
+        setTimeout(() => bubble.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2'), 2500);
+        return;
+      }
+    }
+    if (stick.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const loadOlder = async () => {
     if (!messages?.length) return;

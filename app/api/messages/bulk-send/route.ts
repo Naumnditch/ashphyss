@@ -76,6 +76,10 @@ export async function POST(req: NextRequest) {
     sent: outcome.messages.length,
     emailed: outcome.emailed,
     failed: outcome.messages.filter((m) => m.emailStatus === 'failed').length,
+    retrying: outcome.messages.filter((m) => m.retryAt).length,
+    problems: outcome.messages
+      .filter((m) => m.emailStatus === 'failed' || (m.emailStatus === 'skipped' && m.emailError !== 'No email provider configured'))
+      .map((m) => ({ name: m.name, status: m.emailStatus, error: m.emailError, retryAt: m.retryAt })),
     emailProvider: emailProvider(),
   });
 }

@@ -13,6 +13,7 @@ import type { RecipientFilters } from '@/lib/messaging/filters';
 import { fillPlaceholders, placeholderValues } from '@/lib/messaging/placeholders';
 import { looksBlank } from '@/lib/messaging/text';
 import type { DraftDTO, TemplateDTO } from '@/lib/messaging/types';
+import type { EmailProblem, SendSummary } from '@/lib/messaging/sendSummary';
 import { api } from './api';
 import { MailIcon } from './MailIcons';
 import { Modal } from './Modal';
@@ -93,7 +94,7 @@ export function BulkSendModal({
   onTemplatesChange: (t: TemplateDTO[]) => void;
   audience: AudienceOptions;
   emailProvider: EmailProvider | null;
-  onSent: (s: { recipients: number; emailed: number }) => void;
+  onSent: (s: SendSummary) => void;
   onDraftsChanged: () => void;
 }) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -172,13 +173,13 @@ export function BulkSendModal({
     setSending(true);
     setError(null);
     try {
-      const res = await api<{ sent: number; emailed: number }>('/api/messages/bulk-send', {
+      const res = await api<{ sent: number; emailed: number; problems: EmailProblem[] }>('/api/messages/bulk-send', {
         method: 'POST',
         json: { filters, subject, body, draftId: draftId.current, expectedCount: preview.count },
       });
       draftId.current = null;
       onDraftsChanged();
-      onSent({ recipients: res.sent, emailed: res.emailed });
+      onSent({ recipients: res.sent, emailed: res.emailed, problems: res.problems ?? [] });
       onClose();
     } catch (err) {
       setError((err as Error).message);

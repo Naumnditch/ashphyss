@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { MessageDTO } from '@/lib/messaging/types';
 import { formatMessageTime } from '@/lib/messaging/time';
 import { MailIcon } from './MailIcons';
@@ -9,12 +10,22 @@ import { MailIcon } from './MailIcons';
  * the admin sees their own (outbound) messages on the right; a student sees
  * theirs (inbound) on the right.
  */
-export function MessageItem({ message, viewer, now }: { message: MessageDTO; viewer: 'admin' | 'subscriber'; now?: number }) {
+export function MessageItem({
+  message,
+  viewer,
+  now,
+  onRetryEmail,
+}: {
+  message: MessageDTO;
+  viewer: 'admin' | 'subscriber';
+  now?: number;
+  onRetryEmail?: (messageId: string) => Promise<unknown>;
+}) {
   const mine = viewer === 'admin' ? message.direction === 'outbound' : message.direction === 'inbound';
   const author = message.direction === 'outbound' ? (viewer === 'admin' ? message.senderName ?? 'AshPhys' : 'AshPhys') : viewer === 'admin' ? message.senderName ?? 'Student' : 'You';
 
   return (
-    <article className={`flex ${mine ? 'justify-end' : 'justify-start'}`} aria-label={`Message from ${author}`}>
+    <article id={`m-${message.id}`} className={`flex scroll-mt-4 ${mine ? 'justify-end' : 'justify-start'}`} aria-label={`Message from ${author}`}>
       <div className={`max-w-[88%] sm:max-w-[78%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
           className={`rounded-2xl border px-4 py-3 text-[15px] leading-relaxed shadow-sm ${
@@ -35,7 +46,7 @@ export function MessageItem({ message, viewer, now }: { message: MessageDTO; vie
               <MailIcon name="mail" className="w-3 h-3" /> by email
             </span>
           )}
-          {message.direction === 'outbound' && viewer === 'admin' && <DeliveryStatus message={message} now={now} />}
+          {message.direction === 'outbound' && viewer === 'admin' && <DeliveryStatus message={message} now={now} onRetry={onRetryEmail} />}
           {message.direction === 'inbound' && viewer === 'subscriber' && message.readAt && <span>Seen</span>}
         </div>
       </div>
@@ -43,8 +54,34 @@ export function MessageItem({ message, viewer, now }: { message: MessageDTO; vie
   );
 }
 
-/** Where an outgoing message has got to: read on-site, opened in email, emailed, or on-site only. */
-export function DeliveryStatus({ message, now }: { message: MessageDTO; now?: number }) {
+/** Where an outgoing message has got to: read on-site, opened in email, emailed, retrying, or on-site only. */
+export function DeliveryStatus({ message, now, onRetry }: { message: MessageDTO; now?: number; onRetry?: (id: string) => Promise<unknown> }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+
+  const retryButton =
+    onRetry && (
+      <button
+        type="button"
+        disabled={retrying}
+        onClick={async () => {
+          setRetrying(true);
+          setRetryError(null);
+          try {
+            await onRetry(message.id);
+          } catch (err) {
+            setRetryError((err as Error).message);
+          } finally {
+            setRetrying(false);
+          }
+        }}
+        className="rounded border border-current px-1.5 py-px font-semibold hover:bg-white disabled:opacity-50"
+      >
+        {retrying ? 'Retrying…' : 'Retry now'}
+      </button>
+    );
+  const err = retryError && <span className="text-red-600">{retryError}</span>;
+
   if (message.readAt) {
     return (
       <span className="inline-flex items-center gap-1 font-medium text-blue-700" title={`Read on AshPhys ${formatMessageTime(message.readAt, now)}`}>
@@ -62,24 +99,42 @@ export function DeliveryStatus({ message, now }: { message: MessageDTO; now?: nu
   switch (message.emailStatus) {
     case 'sent':
       return (
-        <span className="inline-flex items-center gap-1" title="Delivered on AshPhys and sent by email; not read yet">
+        <span
+          className="inline-flex items-center gap-1"
+          title={`Delivered on AshPhys and emailed${message.emailSentAt ? ` ${formatMessageTime(message.emailSentAt, now)}` : ''}; not read yet`}
+        >
           <MailIcon name="checks" className="w-3.5 h-3.5" /> Emailed
         </span>
       );
     case 'pending':
-      return <span>Sending…</span>;
+      return <span>Emailing…</span>;
     case 'failed':
       return (
-        <span className="inline-flex items-center gap-1 font-medium text-red-600" title={message.emailError ?? 'The email provider rejected it'}>
-          <MailIcon name="alert" className="w-3.5 h-3.5" /> Email failed · on AshPhys
+        <span className="inline-flex flex-wrap items-center gap-1.5 font-medium text-amber-700" title={message.emailError ?? 'The email service rejected it'}>
+          <MailIcon name="alert" className="w-3.5 h-3.5" />
+          {message.emailNextAttemptAt
+            ? `Email failed · retrying ${formatMessageTime(message.emailNextAttemptAt, now).replace(/^Today /, 'at ')}`
+            : 'Email failed · on AshPhys only'}
+          {retryButton}
+          {err}
         </span>
       );
-    default:
+    default: {
+      const reason = message.emailError ?? '';
+      const label = /^Unsubscribed/.test(reason)
+        ? 'On AshPhys (unsubscribed from email)'
+        : /^Invalid email address/.test(reason)
+          ? 'On AshPhys (invalid email address)'
+          : 'Delivered on AshPhys';
+      const fixable = /^Invalid email address|^No email provider/.test(reason);
       return (
-        <span className="inline-flex items-center gap-1" title={message.emailError ?? 'Delivered to their AshPhys inbox'}>
+        <span className={`inline-flex flex-wrap items-center gap-1.5 ${/^Invalid/.test(reason) ? 'text-amber-700' : ''}`} title={reason || 'Delivered to their AshPhys inbox'}>
           <MailIcon name="check" className="w-3.5 h-3.5" />
-          {message.emailError === 'Unsubscribed from emails' ? 'On AshPhys (unsubscribed from email)' : 'Delivered on AshPhys'}
+          {label}
+          {fixable && onRetry && /^Invalid/.test(reason) && retryButton}
+          {err}
         </span>
       );
+    }
   }
 }

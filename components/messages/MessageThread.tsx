@@ -4,7 +4,8 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { DraftDTO, MessageDTO, SubscriberDTO, TemplateDTO } from '@/lib/messaging/types';
-import { formatDayHeading, sameDay } from '@/lib/messaging/time';
+import { formatDayHeading, formatMessageTime, sameDay } from '@/lib/messaging/time';
+import { summarizeSend, type EmailProblem, type SendNotice } from '@/lib/messaging/sendSummary';
 import { initials, looksBlank } from '@/lib/messaging/text';
 import { api } from './api';
 import { MailIcon } from './MailIcons';
@@ -55,6 +56,7 @@ export function MessageThread({
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<SendNotice | null>(null);
   const [olderLoading, setOlderLoading] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -136,13 +138,35 @@ export function MessageThread({
     }
   };
 
+  const retryEmail = async (messageId: string) => {
+    const res = await api<{ status: string; error: string | null; retryAt: string | null }>(`/api/messages/${messageId}/retry`, { method: 'POST' });
+    await load(false);
+    onChanged();
+    return res;
+  };
+
   const send = async () => {
     setSendError(null);
     if (looksBlank(body)) return setSendError('Write a message first.');
     if (!subject.trim()) return setSendError('Add a subject.');
     setSending(true);
     try {
-      await api('/api/messages/send', { method: 'POST', json: { recipientIds: [subscriberId], subject, body, replyDraftFor: subscriberId } });
+      setNotice(null);
+      const res = await api<{ emailed: number; emailProvider: string | null; messages: { name: string; emailStatus: EmailProblem['status']; emailError: string | null; retryAt: string | null }[] }>(
+        '/api/messages/send',
+        { method: 'POST', json: { recipientIds: [subscriberId], subject, body, replyDraftFor: subscriberId } }
+      );
+      const summary = summarizeSend(
+        {
+          recipients: res.messages.length,
+          emailed: res.emailed,
+          problems: res.messages.filter((m) => m.emailStatus !== 'sent').map((m) => ({ name: m.name, status: m.emailStatus, error: m.emailError, retryAt: m.retryAt })),
+        },
+        Boolean(res.emailProvider),
+        (iso) => formatMessageTime(iso).replace(/^Today /, '')
+      );
+      // Success shows in the message's own status line; only a failed email needs calling out.
+      if (summary.tone === 'warn') setNotice(summary);
       draftExists.current = false;
       setBody('');
       stickToBottom.current = true;
@@ -248,7 +272,7 @@ export function MessageThread({
                 <span className="h-px flex-1 bg-gray-200" />
               </div>
             )}
-            <MessageItem message={m} viewer="admin" now={now} />
+            <MessageItem message={m} viewer="admin" now={now} onRetryEmail={retryEmail} />
           </Fragment>
         ))}
       </div>
@@ -277,6 +301,17 @@ export function MessageThread({
         <RichTextEditor value={body} onChange={setBody} placeholders onSubmit={send} minHeight={90} maxHeight={260} compact placeholder={`Reply to ${s.firstName || name}…`} />
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <SaveIndicator state={saveState} />
+          {notice && (
+            <div role="alert" className="flex w-full items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+              <MailIcon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="flex-1">
+                <strong>{notice.title}.</strong> {notice.detail}
+              </p>
+              <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="rounded p-0.5 text-amber-700 hover:bg-amber-100">
+                <MailIcon name="close" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           {sendError && (
             <span role="alert" className="text-sm text-red-600">
               {sendError}

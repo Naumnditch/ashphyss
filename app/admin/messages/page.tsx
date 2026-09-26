@@ -3,17 +3,17 @@ import type { Metadata } from 'next';
 import { Mailbox } from '@/components/messages/Mailbox';
 import { audienceOptions } from '@/lib/messaging/audience';
 import { emailStatusSummary } from '@/lib/messaging/config';
-import { listTemplates } from '@/lib/messaging/store';
+import { adminReplyEmail, emailDeliveryStats, listTemplates } from '@/lib/messaging/store';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Messages · AshPhys admin' };
 
 // The admin layout already restricts this page to admins.
 export default async function AdminMessagesPage() {
-  const [templates, audience] = await Promise.all([listTemplates(), audienceOptions()]);
+  const [templates, audience, adminEmail, stats] = await Promise.all([listTemplates(), audienceOptions(), adminReplyEmail(), emailDeliveryStats()]);
   return (
     <Suspense>
-      <Mailbox initialTemplates={templates} audience={audience} email={emailStatusSummary()} />
+      <Mailbox initialTemplates={templates} audience={audience} email={emailStatusSummary(adminEmail)} deliveryStats={stats} />
     </Suspense>
   );
 }

@@ -41,9 +41,13 @@ export function unsubscribeHeaders(token: string): Record<string, string> {
 }
 
 interface LayoutInput {
+  /** Shown as a heading above the body (the message subject). */
+  title?: string;
   bodyHtml: string;
   /** The button under the message. */
   action: { href: string; label: string };
+  /** A short line under the button, e.g. how to reply. */
+  note?: string;
   /** Why they got this email, e.g. "You have an AshPhys account". */
   reason: string;
   unsubscribeToken?: string | null;
@@ -52,7 +56,7 @@ interface LayoutInput {
   replyMarker?: boolean;
 }
 
-export function buildEmail({ bodyHtml, action, reason, unsubscribeToken, pixelUrl, replyMarker }: LayoutInput): { html: string; text: string } {
+export function buildEmail({ title, bodyHtml, action, note, reason, unsubscribeToken, pixelUrl, replyMarker }: LayoutInput): { html: string; text: string } {
   const address = postalAddress();
   const unsub = unsubscribeToken ? unsubscribeUrl(unsubscribeToken) : null;
   const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
@@ -65,10 +69,12 @@ ${replyMarker ? `<div style="display:none;max-height:0;overflow:hidden;color:#f4
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;">
 <tr><td style="padding:22px 28px 8px;font-family:${font};font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#1d4ed8;">AshPhys</td></tr>
+${title ? `<tr><td style="padding:6px 28px 2px;font-family:${font};font-size:20px;line-height:1.35;font-weight:700;color:#111827;">${escapeHtml(title)}</td></tr>` : ''}
 <tr><td style="padding:8px 28px 4px;font-family:${font};font-size:15px;line-height:1.65;color:#111827;">${bodyHtml}</td></tr>
-<tr><td style="padding:16px 28px 26px;font-family:${font};">
+<tr><td style="padding:16px 28px ${note ? '10px' : '26px'};font-family:${font};">
 <a href="${escapeHtml(action.href)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px;">${escapeHtml(action.label)}</a>
 </td></tr>
+${note ? `<tr><td style="padding:0 28px 24px;font-family:${font};font-size:13px;line-height:1.5;color:#6b7280;">${escapeHtml(note)}</td></tr>` : ''}
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
 <tr><td style="padding:16px 28px;font-family:${font};font-size:12px;line-height:1.6;color:#6b7280;text-align:center;">
@@ -82,8 +88,10 @@ ${pixelUrl ? `<img src="${escapeHtml(pixelUrl)}" width="1" height="1" alt="" sty
 
   const text = [
     replyMarker ? REPLY_MARKER : null,
+    title ?? null,
     htmlToText(bodyHtml),
     `${action.label}: ${action.href}`,
+    note ?? null,
     '--',
     `${reason}.`,
     unsub ? `Unsubscribe from AshPhys emails: ${unsub}` : null,

@@ -181,3 +181,77 @@ describe('mailbox times', async () => {
     expect(formatDayHeading(new Date(2026, 8, 12).toISOString(), now)).toBe('Saturday, 12 September 2026');
   });
 });
+
+describe('email delivery', async () => {
+  const { nextRetryAt, MAX_EMAIL_ATTEMPTS } = await import('../retryPolicy');
+  const { emailFormatOk, checkEmail } = await import('../validateEmail');
+  const { httpFailureIsPermanent, smtpFailureIsPermanent } = await import('../mailer');
+  const { summarizeSend } = await import('../sendSummary');
+  const { configuredReplyTo } = await import('../config');
+
+  it('backs off, then gives up; permanent failures never retry', () => {
+    const t0 = Date.UTC(2026, 8, 26, 12, 0);
+    expect(nextRetryAt(1, false, t0)!.getTime() - t0).toBe(2 * 60_000);
+    expect(nextRetryAt(2, false, t0)!.getTime() - t0).toBe(10 * 60_000);
+    expect(nextRetryAt(6, false, t0)!.getTime() - t0).toBe(1440 * 60_000);
+    expect(nextRetryAt(MAX_EMAIL_ATTEMPTS, false, t0)).toBeNull();
+    expect(nextRetryAt(1, true, t0)).toBeNull();
+  });
+
+  it('classifies provider failures', () => {
+    expect([400, 422].map(httpFailureIsPermanent)).toEqual([true, true]);
+    expect([401, 403, 408, 429, 500, 503].map(httpFailureIsPermanent).some(Boolean)).toBe(false);
+    expect(smtpFailureIsPermanent(550)).toBe(true);
+    expect(smtpFailureIsPermanent(535)).toBe(false);
+    expect(smtpFailureIsPermanent(421)).toBe(false);
+    expect(smtpFailureIsPermanent(undefined)).toBe(false);
+  });
+
+  it('validates addresses', async () => {
+    for (const ok of ['a@b.co', 'first.last+tag@sub.example.org', "o'neil@example.ie"]) expect(emailFormatOk(ok), ok).toBe(true);
+    for (const bad of ['', 'plain', 'a@b', 'a@@b.com', '.a@b.com', 'a..b@c.com', 'a b@c.com', 'a@-b.com', `${'x'.repeat(65)}@b.com`]) expect(emailFormatOk(bad), bad).toBe(false);
+    process.env.MAIL_VALIDATE_DNS = 'off';
+    expect(await checkEmail('someone@nonexistent-domain-zz9x.com')).toEqual({ ok: true });
+    expect((await checkEmail('nope')).ok).toBe(false);
+  });
+
+  it('checks the domain can receive mail (live DNS)', async () => {
+    delete process.env.MAIL_VALIDATE_DNS;
+    expect(await checkEmail('student@gmail.com')).toEqual({ ok: true });
+    const bad = await checkEmail('student@no-such-domain-ashphys-zz9x.com');
+    expect(bad.ok).toBe(false);
+  }, 15_000);
+
+  it('picks the Reply-To', () => {
+    delete process.env.MAIL_REPLY_TO;
+    delete process.env.MAIL_INBOUND_SECRET;
+    expect(configuredReplyTo('t'.repeat(32))).toBeNull();
+    process.env.MAIL_REPLY_TO = 'AshPhys <help@ashphys.org>';
+    expect(configuredReplyTo('abc')).toEqual({ address: 'help@ashphys.org', synced: false });
+    process.env.MAIL_INBOUND_SECRET = 's';
+    expect(configuredReplyTo('abc')).toEqual({ address: 'help+abc@ashphys.org', synced: true });
+  });
+
+  it('tells the admin when on-site worked but email did not', () => {
+    const fmt = () => '14:32';
+    expect(summarizeSend({ recipients: 2, emailed: 2, problems: [] }, true, fmt)).toEqual({ tone: 'ok', title: 'Sent to 2 people · 2 emailed' });
+    expect(summarizeSend({ recipients: 1, emailed: 0, problems: [{ name: 'Laila', status: 'skipped', error: 'No email provider configured', retryAt: null }] }, true, fmt).tone).toBe('ok');
+    const one = summarizeSend({ recipients: 1, emailed: 0, problems: [{ name: 'Laila', status: 'failed', error: 'Resend 503: busy', retryAt: '2026-09-26T14:32:00Z' }] }, true, fmt);
+    expect(one).toEqual({ tone: 'warn', title: 'Delivered on AshPhys, but not by email yet', detail: 'Email to Laila failed (Resend 503: busy); retrying automatically at 14:32.' });
+    const mixed = summarizeSend(
+      {
+        recipients: 5,
+        emailed: 2,
+        problems: [
+          { name: 'A', status: 'skipped', error: 'Unsubscribed from emails', retryAt: null },
+          { name: 'B', status: 'skipped', error: 'Invalid email address: x.zz can\'t receive email', retryAt: null },
+          { name: 'C', status: 'failed', error: 'SendGrid 400: bad (not retried: rejected by the email service)', retryAt: null },
+        ],
+      },
+      true,
+      fmt
+    );
+    expect(mixed.tone).toBe('warn');
+    expect(mixed.detail).toBe("Couldn't email 2 people: invalid email address; SendGrid 400: bad.");
+  });
+});

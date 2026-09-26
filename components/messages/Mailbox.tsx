@@ -13,7 +13,10 @@ import type { EmailStatusSummary } from '@/lib/messaging/config';
 import type { BulkSendDTO, DraftDTO, TemplateDTO, ThreadSummaryDTO } from '@/lib/messaging/types';
 import { api } from './api';
 import { BulkSendModal } from './BulkSendModal';
-import { ComposeModal, type SendSummary } from './ComposeModal';
+import { ComposeModal } from './ComposeModal';
+import { summarizeSend, type SendNotice, type SendSummary } from '@/lib/messaging/sendSummary';
+import { formatMessageTime } from '@/lib/messaging/time';
+import { EmailSettingsPanel, type DeliveryStats } from './EmailSettingsPanel';
 import { MailboxSidebar, type SidebarTab } from './MailboxSidebar';
 import { MailIcon } from './MailIcons';
 import { MessageThread } from './MessageThread';
@@ -33,10 +36,12 @@ export function Mailbox({
   initialTemplates,
   audience,
   email,
+  deliveryStats,
 }: {
   initialTemplates: TemplateDTO[];
   audience: AudienceOptions;
   email: EmailStatusSummary;
+  deliveryStats: DeliveryStats;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -54,7 +59,7 @@ export function Mailbox({
   const [templates, setTemplates] = useState(initialTemplates);
   const [compose, setCompose] = useState<{ open: boolean; draft?: DraftDTO | null; recipients?: Recipient[] }>({ open: false });
   const [bulk, setBulk] = useState<{ open: boolean; draft?: DraftDTO | null }>({ open: false });
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<SendNotice | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const loaded = useRef(PAGE);
 
@@ -112,7 +117,7 @@ export function Mailbox({
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 6000);
+    const t = setTimeout(() => setToast(null), toast.tone === 'warn' ? 15000 : 6000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -134,22 +139,21 @@ export function Mailbox({
     announceMessagesChanged();
   }, []);
 
-  const onSent = (s: SendSummary | { recipients: number; emailed: number }, bulkSend = false) => {
-    const emailPart = email.provider ? ` · ${s.emailed} emailed` : ' · on-site (email not set up)';
-    setToast(`Sent to ${s.recipients} ${s.recipients === 1 ? 'person' : 'people'}${emailPart}`);
+  const onSent = (s: SendSummary, bulkSend = false) => {
+    setToast(summarizeSend(s, Boolean(email.provider), (iso) => formatMessageTime(iso).replace(/^Today /, '')));
     refreshAfterChange();
     if (bulkSend) loadBulk();
-    if ('firstSubscriberId' in s && s.firstSubscriberId && s.recipients === 1) select(s.firstSubscriberId);
+    if (s.firstSubscriberId && s.recipients === 1) select(s.firstSubscriberId);
   };
 
   const openDraft = (d: DraftDTO) => (d.kind === 'bulk' ? setBulk({ open: true, draft: d }) : setCompose({ open: true, draft: d }));
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-start gap-3">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
-          <EmailStatus email={email} />
+          <EmailSettingsPanel email={email} stats={deliveryStats} />
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
           <button
@@ -243,41 +247,31 @@ export function Mailbox({
         onDraftsChanged={loadDrafts}
       />
 
-      {toast && (
-        <div role="status" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-lg animate-fade-in-up">
-          {toast}
-        </div>
-      )}
+      {toast && <SendToast notice={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }
 
-const PROVIDER_NAME = { resend: 'Resend', sendgrid: 'SendGrid', smtp: 'SMTP' } as const;
-
-function EmailStatus({ email }: { email: EmailStatusSummary }) {
-  const [open, setOpen] = useState(false);
-  const ok = Boolean(email.provider);
+/** The result of a send: a dark pill for success, an amber card when an email didn't go out. */
+export function SendToast({ notice, onClose }: { notice: SendNotice; onClose: () => void }) {
+  if (notice.tone === 'ok') {
+    return (
+      <div role="status" className="fixed bottom-4 left-1/2 z-[60] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white shadow-lg animate-fade-in-up">
+        {notice.title}
+        {notice.detail && <span className="font-normal text-gray-300"> · {notice.detail}</span>}
+      </div>
+    );
+  }
   return (
-    <div className="mt-0.5 text-sm">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-800">
-        <span className={`h-2 w-2 rounded-full ${ok ? (email.replySync ? 'bg-emerald-500' : 'bg-blue-500') : 'bg-amber-500'}`} />
-        {ok
-          ? `Email via ${PROVIDER_NAME[email.provider!]}${email.replySync ? ' · replies sync back here' : ' · email replies not synced yet'}`
-          : 'On-site delivery only · email not set up yet'}
-        <MailIcon name="chevronDown" className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+    <div role="alert" className="fixed bottom-4 left-1/2 z-[60] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50 p-3 pr-10 text-sm shadow-lg animate-fade-in-up">
+      <p className="flex items-center gap-2 font-semibold text-amber-900">
+        <MailIcon name="alert" className="h-4 w-4 shrink-0" />
+        {notice.title}
+      </p>
+      {notice.detail && <p className="mt-1 pl-6 text-amber-800">{notice.detail}</p>}
+      <button type="button" onClick={onClose} aria-label="Dismiss" className="absolute right-2 top-2 rounded p-1 text-amber-700 hover:bg-amber-100">
+        <MailIcon name="close" className="h-4 w-4" />
       </button>
-      {open && (
-        <div className="mt-2 max-w-2xl rounded-lg border border-gray-200 bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-600">
-          <p>
-            Every message always lands in the student&apos;s inbox at <code className="rounded bg-white px-1">/dashboard/messages</code>, where they can reply.
-            {ok ? ` It is also emailed from ${email.from}.` : ' To also email it, add an email provider key in Vercel (RESEND_API_KEY, SENDGRID_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS) plus MAIL_FROM.'}
-          </p>
-          {ok && !email.replySync && (
-            <p className="mt-1.5">To file emailed replies here automatically, set MAIL_REPLY_TO and MAIL_INBOUND_SECRET and point your provider&apos;s inbound parse at /api/messages/inbound.</p>
-          )}
-          {!email.postalAddressSet && <p className="mt-1.5">Add MAIL_POSTAL_ADDRESS so the email footer carries a postal address (required by CAN-SPAM).</p>}
-        </div>
-      )}
     </div>
   );
 }

@@ -16,6 +16,10 @@ export interface MessageDTO {
   emailStatus: EmailStatus;
   emailError: string | null;
   emailOpenedAt: string | null;
+  emailAttempts: number;
+  /** When a failed email will be tried again (null: not scheduled). */
+  emailNextAttemptAt: string | null;
+  emailSentAt: string | null;
   bulk: boolean;
 }
 

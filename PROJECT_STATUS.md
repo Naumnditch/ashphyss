@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-09-25 (Messaging / mailbox: admin mailbox, student inbox, bulk sends, templates, drafts, email via Resend/SendGrid/SMTP with reply sync and unsubscribe; see the last entry)
+Last updated: 2026-09-26 (Mailbox email delivery: address validation, automatic retries via Supabase pg_cron, delivery status, failure warnings, test email; see the last entry)
 
 ---
 
@@ -3057,3 +3057,50 @@ always and by email when a provider is configured.
   `MAIL_POSTAL_ADDRESS`; for reply sync also `MAIL_REPLY_TO` +
   `MAIL_INBOUND_SECRET` and an inbound-parse route to the webhook. See
   `.env.example`.
+
+## Mailbox email delivery: validation, retries, warnings (2026-09-26)
+
+Sending from the mailbox saves the on-site message first, then emails it;
+an email problem never undoes the on-site delivery.
+
+- **Before sending**: skipped (on-site only) if the person unsubscribed, no
+  provider is configured, or the address is invalid: bad format, or its
+  domain can't receive mail (`lib/messaging/validateEmail.ts`: MX, else
+  A/AAAA; a null MX counts as "no mail"; DNS errors/timeouts never block;
+  `MAIL_VALIDATE_DNS=off` disables the lookup).
+- **Sending** (`mailer.ts`): 12 s timeouts; failures classified as
+  permanent (HTTP 400/404/413/422, SMTP 5xx except 530/535/554) or
+  retryable (timeouts, 408/429/5xx, 401/403 credentials, SMTP 4xx). A
+  retryable failure gets one quick retry in the same request.
+- **Retries** (`retryPolicy.ts`): after 2, 10, 30, 120, 480, 1440 minutes,
+  then gives up (7 attempts). `retryDueEmails()` claims due rows with
+  `FOR UPDATE SKIP LOCKED` and a 10-minute lease, so concurrent runs never
+  double-send and an interrupted send is picked up again. Run by
+  `GET /api/cron/email-retry` (Bearer `CRON_SECRET`, or an admin), which a
+  **Supabase pg_cron job** (`ashphys-email-retry`, every 5 min, via pg_net,
+  token in Vault as `email_retry_cron_secret`) calls only when something
+  is due. Retries re-check unsubscribes and address validity.
+- **Status in the database** (`messages`): `email_status` (pending / sent /
+  failed / skipped), `email_error`, `email_attempts`,
+  `email_last_attempt_at`, `email_next_attempt_at`, `email_sent_at`,
+  `email_provider_id` (migration `messaging_email_delivery`).
+- **In the mailbox**: after a send, a warning card if any email failed or
+  was skipped for a real reason ("Delivered on AshPhys, but not by email
+  yet… retrying automatically at 16:54"); per message "Email failed ·
+  retrying at …" / "On AshPhys (invalid email address)" with **Retry now**
+  (`POST /api/messages/:id/retry`). The line under "Messages" opens an
+  email settings panel: provider, sender, where replies go, retry status,
+  30-day sent/retrying/failed counts, and **Send test email**
+  (`POST /api/messages/test-email`, shows the provider's exact error).
+- **The email**: subject as a heading, the message, a **View in AshPhys**
+  button deep-linking to that message (`/dashboard/messages#m-<id>`, which
+  scrolls to and highlights it), a reply note, and the CAN-SPAM footer.
+- **Reply-To**: `MAIL_REPLY_TO` if set (plus-addressed and synced when
+  `MAIL_INBOUND_SECRET` is also set); otherwise the admin's own email
+  (`ADMIN_NOTIFY_EMAIL`, else the admin account: naumnditch572@gmail.com),
+  so students' replies land in your inbox. Admin "new message" alerts now
+  set Reply-To to the student's email when replies aren't synced.
+- Verified end to end on a local Postgres + SMTP sink simulating 451 and
+  550 responses (37 checks), plus 21 unit tests.
+- **Still needed to actually send email**: a provider key in Vercel (none
+  is set). `CRON_SECRET` is already set in Vercel production.

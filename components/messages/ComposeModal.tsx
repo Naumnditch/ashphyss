@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DraftDTO, TemplateDTO } from '@/lib/messaging/types';
 import { looksBlank } from '@/lib/messaging/text';
+import type { EmailProblem, SendSummary } from '@/lib/messaging/sendSummary';
 import { api } from './api';
 import { MailIcon } from './MailIcons';
 import { Modal } from './Modal';
@@ -13,11 +14,7 @@ import { RichTextEditor } from './RichTextEditor';
 import { SaveAsTemplate, TemplatePicker } from './TemplatePicker';
 import { SaveIndicator, useAutosave } from './useAutosave';
 
-export interface SendSummary {
-  recipients: number;
-  emailed: number;
-  firstSubscriberId?: string;
-}
+export type { SendSummary };
 
 export function ComposeModal({
   open,
@@ -81,13 +78,20 @@ export function ComposeModal({
     if (looksBlank(body)) return setError('Write a message first.');
     setSending(true);
     try {
-      const res = await api<{ emailed: number; messages: { subscriberId: string }[] }>('/api/messages/send', {
+      const res = await api<{ emailed: number; messages: (EmailProblem & { subscriberId: string; emailStatus: EmailProblem['status']; emailError: string | null })[] }>('/api/messages/send', {
         method: 'POST',
         json: { recipientIds: recipients.map((r) => r.id), subject, body, draftId: draftId.current },
       });
       draftId.current = null;
       onDraftsChanged();
-      onSent({ recipients: res.messages.length, emailed: res.emailed, firstSubscriberId: res.messages[0]?.subscriberId });
+      onSent({
+        recipients: res.messages.length,
+        emailed: res.emailed,
+        firstSubscriberId: res.messages[0]?.subscriberId,
+        problems: res.messages
+          .filter((m) => m.emailStatus !== 'sent')
+          .map((m) => ({ name: m.name, status: m.emailStatus, error: m.emailError, retryAt: m.retryAt })),
+      });
       onClose();
     } catch (err) {
       setError((err as Error).message);
