@@ -32,7 +32,7 @@ const REASON_COPY: Record<AccessReason, { title: string; body: string }> = {
   limit_reached: { title: "You've used your free solution views", body: "Upgrade your plan to keep opening full step-by-step solutions." },
 };
 
-export function SolutionViewer({ id }: { id: string }) {
+export function SolutionViewer({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const [solution, setSolution] = useState<SolutionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +54,7 @@ export function SolutionViewer({ id }: { id: string }) {
     return (
       <div className="py-16 text-center">
         <p className="text-sm text-red-600">{error}</p>
-        <Link href="/solutions" className="mt-3 inline-block text-sm font-medium text-gray-700 underline">Back to solutions</Link>
+        {!embedded && <Link href="/curriculum" className="mt-3 inline-block text-sm font-medium text-gray-700 underline">Back to curriculum</Link>}
       </div>
     );
   }
@@ -64,21 +64,25 @@ export function SolutionViewer({ id }: { id: string }) {
 
   return (
     <div>
-      <Link href="/solutions" className="text-sm text-[#2e7d6b] hover:underline mb-6 inline-block font-medium">
-        ← Back to solutions
-      </Link>
+      {!embedded && (
+        <>
+          <Link href="/curriculum" className="text-sm text-[#2e7d6b] hover:underline mb-6 inline-block font-medium">
+            ← Back to curriculum
+          </Link>
 
-      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-        <DifficultyBadge difficulty={solution.difficulty} />
-        <TierBadge tier={solution.tierRequired} />
-      </div>
-      <h1 className="text-2xl sm:text-3xl font-semibold text-[#1b2a41] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-        {solution.problemTitle}
-      </h1>
-      <p className="text-sm text-gray-400 mb-6">
-        Ch. {solution.chapter}{solution.chapterTitle ? ` — ${solution.chapterTitle}` : ''} · {solution.topic}
-        {solution.problemNumber ? ` · #${solution.problemNumber}` : ''}
-      </p>
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            <DifficultyBadge difficulty={solution.difficulty} />
+            <TierBadge tier={solution.tierRequired} />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-[#1b2a41] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+            {solution.problemTitle}
+          </h1>
+          <p className="text-sm text-gray-400 mb-6">
+            {solution.topic}
+            {solution.problemNumber ? ` · #${solution.problemNumber}` : ''}
+          </p>
+        </>
+      )}
 
       {access.allowed ? (
         <SolutionContent solution={solution} />

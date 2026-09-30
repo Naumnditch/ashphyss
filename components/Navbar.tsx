@@ -1,30 +1,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { query } from '@/lib/db/client';
 import { CurriculumDropdown } from './CurriculumDropdown';
 import { NavDropdown } from './NavDropdown';
 import { SearchBar } from './SearchBar';
 import { getCurrentUser } from '@/lib/auth/session';
 import { MessagesNavLink } from './messages/MessagesNavLink';
-import { IGCSE_COURSE_CODE } from '@/lib/curricula';
-
-async function getChapters() {
-  try {
-    const result = await query(
-      // The dropdown lists the IGCSE coursebook's chapters; the other
-      // curricula are organised by syllabus unit on /curriculum instead.
-      `SELECT c.id, c.chapter_number, c.title
-       FROM chapters c JOIN courses co ON co.id = c.course_id
-       WHERE c.status = 'published' AND co.code = $1
-       ORDER BY c.chapter_number ASC`,
-      [IGCSE_COURSE_CODE]
-    );
-    return result.rows;
-  } catch (err) {
-    console.error('Navbar: failed to load chapters', err);
-    return [];
-  }
-}
 
 function dashboardHref(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
   if (user.role === 'admin') return '/admin/teacher-applications';
@@ -33,7 +13,7 @@ function dashboardHref(user: NonNullable<Awaited<ReturnType<typeof getCurrentUse
 }
 
 export async function Navbar() {
-  const [chapters, user] = await Promise.all([getChapters(), getCurrentUser()]);
+  const user = await getCurrentUser();
 
   return (
     <header className="border-b border-gray-200">
@@ -51,13 +31,12 @@ export async function Navbar() {
           </Link>
         </div>
         <nav className="flex items-center gap-2 sm:gap-5">
-          <div className="hidden lg:block"><CurriculumDropdown chapters={chapters} /></div>
+          <div className="hidden lg:block"><CurriculumDropdown /></div>
 
           <div className="hidden lg:block">
             <NavDropdown
               label="Study Materials"
               items={[
-                { href: '/solutions', label: 'Solutions', hint: 'Interactive step-by-step walkthroughs' },
                 { href: '/past-papers', label: 'Past Papers', hint: 'With video walkthroughs' },
                 { href: '/booklets', label: 'Booklets', hint: 'Printable course notes' },
                 { href: '/resources', label: 'Resources' },
@@ -85,7 +64,6 @@ export async function Navbar() {
               label="Menu"
               items={[
                 { href: '/curriculum', label: 'Curriculum' },
-                { href: '/solutions', label: 'Solutions' },
                 { href: '/courses', label: 'Courses' },
                 { href: '/pricing', label: 'Pricing' },
                 { href: '/past-papers', label: 'Past Papers' },

@@ -4,13 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { CURRICULUM_LIST } from '@/lib/curricula';
 
-interface Chapter {
-  id: string;
-  chapter_number: number;
-  title: string;
-}
-
-export function CurriculumDropdown({ chapters }: { chapters: Chapter[] }) {
+export function CurriculumDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,7 +36,7 @@ export function CurriculumDropdown({ chapters }: { chapters: Chapter[] }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div className="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
           <Link
             href="/curriculum"
             onClick={() => setOpen(false)}
@@ -65,21 +59,6 @@ export function CurriculumDropdown({ chapters }: { chapters: Chapter[] }) {
               </Link>
             ))}
           </div>
-          <p className="px-4 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">IGCSE chapters</p>
-          <ul className="py-1">
-            {chapters.map((chapter) => (
-              <li key={chapter.id}>
-                <Link
-                  href={`/curriculum/${chapter.id}`}
-                  onClick={() => setOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <span className="text-gray-400 mr-2">{chapter.chapter_number}.</span>
-                  {chapter.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

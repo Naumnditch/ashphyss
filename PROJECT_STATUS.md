@@ -20,6 +20,12 @@ Last updated: 2026-09-30 (A Level units 12–13 practice banks: 99 questions wit
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
 
+### UI cleanup 2026-09-30 (navbar, mastered screen, embedded solutions)
+- Navbar Curriculum dropdown now shows only "View Full Curriculum" + the four curriculum choices (the old IGCSE chapter list is gone).
+- Practice: the "Topic Mastered" screen only appears once no question is untried/skipped; a streak earned part-way no longer hides unfinished questions.
+- Interactive solutions are embedded in practice: any question with `problems.solution_id` shows an optional, collapsed "Interactive solution" button that loads the solution inline (tier/view-cap gating unchanged, views only spent on open). The standalone Solutions catalog, its navbar links and `GET /api/solutions` are removed; `/solutions` redirects to `/curriculum`. The duplicate card was the catalog joining `chapters` by number only (ch. 17 exists in IGCSE and 9702).
+- TODO (content): author an interactive solution for every question and link it via `problems.solution_id` (admin: /admin/solutions). Only "Four Charges on a Square" exists, linked to 2 questions.
+
 ## What's fully built and live
 
 - **Homepage / positioning**: platform-first, not tutoring-first. Markets

@@ -8,6 +8,7 @@ import { trackEvent } from '@/lib/analytics/client';
 import { previewAnswer, FORMAT_HINT } from '@/lib/grading/numericAnswer';
 import { nextQuestionIndex, type QuestionStatus } from '@/lib/practice/progress';
 import { QuestionMap } from '@/components/practice/QuestionMap';
+import { SolutionViewer } from '@/components/solutions/SolutionViewer';
 
 interface Option {
   id: string;
@@ -85,6 +86,7 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
   const [mastery, setMastery] = useState<Mastery | null>(null);
   const [statuses, setStatuses] = useState<Record<string, QuestionStatus>>({});
 
+  const [solutionOpenFor, setSolutionOpenFor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>('');
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{
@@ -199,6 +201,7 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
   const goTo = (i: number) => {
     setSelected('');
     setResult(null);
+    setSolutionOpenFor(null);
     setIndex(i);
   };
 
@@ -230,7 +233,12 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
 
   const streakNeeded = mastery.streakNeeded || 5;
 
-  if (mastery.mastered && !result) {
+  // The "Topic Mastered" screen is only for a student who has worked through
+  // the whole set. A streak earned part-way through must not hide questions
+  // that are still untried or skipped, so those always go back to the questions.
+  const finishedAllQuestions = statusList.every((s) => s !== 'untried' && s !== 'skipped');
+
+  if (mastery.mastered && finishedAllQuestions && !result) {
     return (
       <div className="text-center py-10">
         <div className="w-16 h-16 rounded-full bg-green-50 mx-auto mb-6 flex items-center justify-center text-3xl">
@@ -378,6 +386,25 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
         )}
       </div>
 
+      {/* Optional interactive solution: the student opens it if they want it.
+          It mounts (and fetches) only when opened, so closed ones cost nothing. */}
+      {current.solutionId && (
+        <div className="mb-5">
+          <button
+            onClick={() => setSolutionOpenFor((cur) => (cur === current.id ? null : current.id))}
+            aria-expanded={solutionOpenFor === current.id}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-white border border-violet-300 text-violet-700 px-4 py-2 rounded-full hover:bg-violet-50"
+          >
+            ✨ {solutionOpenFor === current.id ? 'Hide interactive solution' : 'Interactive solution (optional)'}
+          </button>
+          {solutionOpenFor === current.id && (
+            <div className="mt-3">
+              <SolutionViewer key={current.solutionId} id={current.solutionId} embedded />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Feedback */}
       {result && (
         <div
@@ -393,15 +420,6 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
           )}
           {result.explanation && (
             <p className="text-sm text-gray-700 leading-relaxed">{result.explanation}</p>
-          )}
-
-          {current?.solutionId && (
-            <Link
-              href={`/solutions/${current.solutionId}`}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold bg-white border border-violet-300 text-violet-700 px-3 py-1.5 rounded-full hover:bg-violet-50"
-            >
-              ✨ View full interactive solution
-            </Link>
           )}
 
           {!result.isCorrect && (
