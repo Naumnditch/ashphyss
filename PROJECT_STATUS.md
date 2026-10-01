@@ -20,6 +20,12 @@ Last updated: 2026-09-30 (A Level units 12–13 practice banks: 99 questions wit
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
 
+### Circular motion cheat sheet (2026-10-01)
+- Static page, no app code: `public/cheatsheets/circular-motion-cheatsheet.html` → www.ashphys.org/cheatsheets/circular-motion-cheatsheet.html. A notebook page with handwritten fonts (Caveat for headings; Playpen Sans for body and equations, because it has Greek, so ω, θ and π stay handwritten). Rough.js draws the boxes, underlines, circles, highlighter and 8 diagrams. Each section has a worked example with its solution hidden until opened. Also: B&W ink toggle, print CSS for A4, a html2pdf "Save as PDF" button that falls back to window.print(), and a QR code to the 3.7 lesson.
+- Content follows lesson 3.7 Circular motion (extension). Every item is tagged `0625` (in the exam: qualitative F/v/r/m rules, v = 2πr/T, energy in orbits) or `★ ext` (ω, a = v²/r, F = mv²/r, vertical circles, banking, conical pendulum). g = 9.8 m/s².
+- CDN only (jsdelivr: roughjs@4.6.6, html2pdf.js@0.10.1, qrcode-generator@1.4.4). Without Rough.js it draws the same diagrams as plain SVG.
+- Not linked from any app page yet: nothing on the lesson page points to it.
+
 ### UI cleanup 2026-09-30 (navbar, mastered screen, embedded solutions)
 - Navbar Curriculum dropdown now shows only "View Full Curriculum" + the four curriculum choices (the old IGCSE chapter list is gone).
 - Practice: the "Topic Mastered" screen only appears once no question is untried/skipped; a streak earned part-way no longer hides unfinished questions.

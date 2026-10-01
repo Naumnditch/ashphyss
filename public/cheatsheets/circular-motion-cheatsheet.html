@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circular Motion Cheat Sheet</title>
+<meta name="description" content="Handwritten-style revision cheat sheet for circular motion: IGCSE Physics 0625 essentials plus the extension equations (ω, v = ωr, a = v²/r, F = mv²/r), with worked examples and diagrams.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Caveat: headings and margin notes. Playpen Sans: body and equations (a
+     handwriting face that also has Greek, so ω, θ and π stay handwritten). -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Playpen+Sans:wght@300;400;600&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --desk: #e6e0d2;
+  --paper: #fcf8ee;
+  --rule: #d3dfee;
+  --margin: #e9a3a3;
+  --ink: #1c2748;       /* navy: main handwriting */
+  --ink-2: #3b3b3b;     /* charcoal: weights, construction lines */
+  --blue: #1f5fc4;      /* velocity */
+  --red: #c42f2a;       /* centripetal acceleration / force */
+  --green: #1c7a3d;     /* components, "do this" */
+  --amber: #c97d00;     /* extension tags, the Sun */
+  --hl: rgba(255, 213, 0, 0.5);
+  --hl-pink: rgba(255, 105, 160, 0.28);
+  --hl-green: rgba(90, 210, 110, 0.32);
+  --sticky: #fff3a8;
+  --font-head: 'Caveat', 'Playpen Sans', 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', cursive;
+  --font-body: 'Playpen Sans', 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', cursive;
+  --line: 30px;
+}
+/* Black-and-white ink for photocopying / scanning. */
+:root[data-ink="mono"] {
+  --ink: #111; --ink-2: #333; --blue: #111; --red: #111; --green: #222; --amber: #222;
+  --hl: rgba(0, 0, 0, 0.13); --hl-pink: rgba(0, 0, 0, 0.1); --hl-green: rgba(0, 0, 0, 0.1);
+  --sticky: #f4f4f4; --margin: #bbb; --rule: #e2e2e2;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* ---------- toolbar ---------- */
+.toolbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  padding: 10px 16px;
+  background: rgba(230, 224, 210, 0.92);
+  backdrop-filter: blur(4px);
+  border-bottom: 1px solid #d3cbb7;
+}
+.toolbar button {
+  font: 600 14px/1 var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; /* wobbly hand-drawn pill */
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 rgba(28, 39, 72, 0.25);
+}
+.toolbar button:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 rgba(28, 39, 72, 0.3); }
+.toolbar button:active { transform: translate(1px, 1px); box-shadow: none; }
+.toolbar button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.toolbar button:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+/* ---------- the notebook page ---------- */
+.sheet {
+  position: relative;
+  max-width: 880px;
+  margin: 24px auto 48px;
+  padding: 34px 34px 40px 88px;
+  background-color: var(--paper);
+  background-image:
+    /* punched holes */
+    radial-gradient(circle at 26px 48px, var(--desk) 0 8px, rgba(0,0,0,.12) 8.5px, transparent 9.5px),
+    /* red margin line */
+    linear-gradient(to right, transparent 64px, var(--margin) 64px, var(--margin) 66px, transparent 66px),
+    /* paper grain */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .36 0 0 0 0 .22 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    /* ruled lines */
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px), var(--rule) var(--line));
+  background-size: 100% 96px, 100% 100%, 180px 180px, 100% var(--line);
+  background-repeat: repeat-y, no-repeat, repeat, repeat;
+  background-position: 0 0, 0 0, 0 0, 0 22px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 30px rgba(60, 45, 20, 0.18);
+  border-radius: 3px;
+}
+
+/* ---------- rough.js annotation layer ---------- */
+[data-rough] { position: relative; z-index: 0; }
+span[data-rough], b[data-rough], em[data-rough] { display: inline-block; max-width: 100%; }
+svg.ann, img.ann { position: absolute; z-index: -1; pointer-events: none; overflow: visible; }
+
+/* ---------- header ---------- */
+.head { display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; align-items: start; margin-bottom: 10px; }
+.kicker { font: 600 13px/1.3 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
+h1 {
+  font: 700 clamp(46px, 9vw, 76px)/1 var(--font-head);
+  margin: 4px 0 6px;
+  color: var(--ink);
+  transform: rotate(-1.2deg);
+  transform-origin: left center;
+}
+.subtitle { margin: 0; font-size: 15px; }
+.stamp {
+  font: 700 22px/1.05 var(--font-head);
+  color: var(--red);
+  text-align: center;
+  padding: 16px 18px;
+  transform: rotate(7deg);
+  margin-top: 6px;
+}
+.stamp small { display: block; font: 400 12px/1.3 var(--font-body); color: var(--ink-2); margin-top: 3px; }
+.legend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; margin-top: 4px; }
+
+.tag {
+  display: inline-block;
+  font: 600 11.5px/1 var(--font-body);
+  letter-spacing: .03em;
+  padding: 4px 7px 3px;
+  border: 1.6px solid currentColor;
+  border-radius: 12px 4px 12px 4px / 4px 12px 4px 12px;
+  vertical-align: 2px;
+  white-space: nowrap;
+  transform: rotate(-2deg);
+}
+.tag.core { color: var(--green); }
+.tag.ext { color: var(--amber); }
+
+/* ---------- cards / sections ---------- */
+.grid { display: grid; grid-template-columns: 1fr; gap: 30px 30px; }
+.card { padding: 20px 20px 18px; break-inside: avoid; page-break-inside: avoid; }
+.card.sticky { background: var(--sticky); box-shadow: 2px 4px 10px rgba(80, 60, 0, 0.18); transform: rotate(-0.4deg); }
+.card h2 {
+  font: 700 34px/1.05 var(--font-head);
+  margin: 0 0 10px;
+  color: var(--ink);
+}
+.card h2 .num { color: var(--red); margin-right: 8px; padding: 0 7px; }
+.card h3 { font: 700 25px/1.1 var(--font-head); margin: 16px 0 6px; color: var(--ink); }
+.card p { margin: 6px 0; }
+.card ul { margin: 6px 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+.card li::marker { color: var(--red); }
+
+.eq {
+  display: inline-block;
+  font: 600 18px/1.25 var(--font-body);
+  padding: 3px 8px;
+  margin: 2px 2px;
+  white-space: nowrap;
+}
+.eq.big { font-size: 22px; padding: 6px 12px; }
+.eq-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 8px 0; }
+.unit { font: 300 13px/1 var(--font-body); color: var(--ink-2); }
+.hl { padding: 0 3px; }
+.blue { color: var(--blue); } .red { color: var(--red); } .green { color: var(--green); } .amber { color: var(--amber); }
+
+.note {
+  font: 600 21px/1.1 var(--font-head);
+  color: var(--red);
+  transform: rotate(-3deg);
+  margin: 10px 0 4px;
+}
+.note.right { float: right; max-width: 44%; margin: 0 0 8px 14px; text-align: center; }
+
+.split { display: grid; grid-template-columns: 1fr; gap: 10px 22px; align-items: start; }
+.grid > *, .split > * { min-width: 0; }
+figure { margin: 6px 0; }
+figure svg.dia { display: block; width: 100%; height: auto; }
+figcaption { font: 600 19px/1.1 var(--font-head); color: var(--ink-2); text-align: center; margin-top: 2px; }
+svg.dia text { font-family: var(--font-body); }
+
+table.provider { border-collapse: collapse; width: 100%; font-size: 14px; margin: 6px 0; }
+table.provider td, table.provider th { text-align: left; padding: 5px 6px; border-bottom: 1.5px dashed rgba(28, 39, 72, 0.25); vertical-align: top; }
+table.provider th { font: 700 20px/1 var(--font-head); color: var(--ink-2); }
+
+/* ---------- worked examples ---------- */
+.worked { margin-top: 14px; padding: 12px 14px 10px; border-left: 4px solid var(--green); background: rgba(90, 210, 110, 0.08); }
+.worked .q { margin: 0 0 6px; }
+.worked .q b { font: 700 22px/1 var(--font-head); color: var(--green); margin-right: 4px; }
+details summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-block;
+  font: 700 20px/1.2 var(--font-head);
+  color: var(--blue);
+  padding: 2px 4px;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before { content: '\25B8  '; }
+details[open] summary::before { content: '\25BE  '; }
+details summary .when-open { display: none; }
+details[open] summary .when-open { display: inline; }
+details[open] summary .when-closed { display: none; }
+ol.sol { margin: 6px 0 2px; padding-left: 22px; }
+ol.sol li { margin: 3px 0; }
+.answer { font-weight: 600; }
+
+/* ---------- misconceptions ---------- */
+.mis { list-style: none; padding: 0 !important; display: grid; grid-template-columns: 1fr; gap: 10px 26px; }
+.mis li { margin: 0 !important; padding-left: 0; }
+.mis .x { color: var(--red); font-weight: 600; }
+.mis .x::before { content: '\2717  '; }
+.mis .ok { color: var(--green); display: block; margin-top: 2px; }
+.mis .ok::before { content: '\2713  '; font-weight: 600; }
+
+/* ---------- key equations ---------- */
+table.keyeq { width: 100%; border-collapse: collapse; font-size: 15px; }
+table.keyeq th { font: 700 21px/1 var(--font-head); text-align: left; padding: 4px 8px; color: var(--ink-2); }
+table.keyeq td { padding: 6px 8px; border-top: 1.5px solid rgba(28, 39, 72, 0.18); vertical-align: middle; }
+table.keyeq td.f { font: 600 19px/1.2 var(--font-body); white-space: nowrap; }
+
+/* ---------- footer ---------- */
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; margin-top: 34px; padding-top: 16px; border-top: 2px dashed rgba(28, 39, 72, 0.3); font-size: 14px; }
+.qr { width: 104px; height: 104px; padding: 6px; background: #fff; flex: 0 0 auto; }
+.qr svg { display: block; width: 100%; height: 100%; }
+.qr[hidden] { display: none; }
+.foot a { color: var(--blue); word-break: break-all; }
+.foot .sig { margin-left: auto; font: 700 24px/1 var(--font-head); color: var(--ink-2); transform: rotate(-3deg); }
+
+/* ---------- wider screens: two columns, like a real revision page ---------- */
+@media (min-width: 720px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+  .wide { grid-column: 1 / -1; }
+  .split { grid-template-columns: 1fr 1fr; }
+  .split.r { grid-template-columns: 1.1fr 0.9fr; }
+  .mis { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+  .sheet {
+    margin: 0; border-radius: 0;
+    overflow-x: clip; /* hand-drawn strokes may wobble past the page edge */
+    padding: 22px 16px 28px 40px;
+    background-image:
+      linear-gradient(to right, transparent 28px, var(--margin) 28px, var(--margin) 30px, transparent 30px),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .36 0 0 0 0 .22 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+      repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px), var(--rule) var(--line));
+    background-size: 100% 100%, 180px 180px, 100% var(--line);
+    background-repeat: no-repeat, repeat, repeat;
+    background-position: 0 0, 0 0, 0 22px;
+  }
+  .head { grid-template-columns: 1fr; }
+  .stamp { justify-self: start; font-size: 17px; padding: 8px 16px; margin: 0; transform: rotate(-4deg); }
+  .stamp br { display: none; }
+  .card { padding: 16px 12px 14px; }
+  .card h2 { font-size: 30px; }
+  .note.right { float: none; max-width: none; text-align: left; margin: 8px 0; }
+  .eq.big { font-size: 19px; }
+  table.keyeq td.f { white-space: normal; }
+  table.keyeq .hide-sm { display: none; }
+  .foot .sig { margin-left: 0; }
+}
+
+/* ---------- print / save as PDF ---------- */
+@page { size: A4; margin: 10mm 10mm 12mm; }
+@media print {
+  :root { --line: 26px; }
+  body { background: #fff; font-size: 11.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .toolbar, .no-print { display: none !important; }
+  .sheet {
+    max-width: none; margin: 0; padding: 0 0 0 12mm;
+    background-color: #fff; /* plain white scans and photocopies best */
+    box-shadow: none; border-radius: 0;
+    background-image: linear-gradient(to right, transparent 5mm, var(--margin) 5mm, var(--margin) calc(5mm + 1.5px), transparent calc(5mm + 1.5px));
+    background-size: 100% 100%; background-repeat: no-repeat; background-position: 0 0;
+  }
+  .grid { grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  .wide { grid-column: 1 / -1; }
+  .split { grid-template-columns: 1fr 1fr; }
+  .mis { grid-template-columns: 1fr 1fr; }
+  .card { padding: 10px 12px; }
+  .card { break-inside: auto; page-break-inside: auto; }
+  figure svg.dia { max-width: 300px; margin: 0 auto; }
+  .card.sticky, .worked, figure, tr, .mis li, .eq-row { break-inside: avoid; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  .card.sticky { box-shadow: none; transform: none; border: 1.5px solid #c9b64a; }
+  .card.sticky > svg.ann { display: none; }
+  .card h2 { font-size: 27px; }
+  .card h3 { font-size: 21px; }
+  .eq { font-size: 15px; }
+  .eq.big { font-size: 17px; }
+  details summary { display: none; }
+  .worked { break-inside: avoid; }
+  .worked .sol::before { content: 'Solution'; display: block; font: 700 17px/1 var(--font-head); color: var(--blue); margin: 2px 0 2px -22px; }
+  a { color: inherit; text-decoration: none; }
+  figure { break-inside: avoid; }
+}
+/* While html2pdf takes its snapshot. */
+.exporting .toolbar { display: none; }
+.exporting .sheet { margin: 0 auto; box-shadow: none; }
+.exporting details summary { display: none; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print" role="toolbar" aria-label="Cheat sheet tools">
+  <button type="button" id="btn-solutions" aria-pressed="false">Show all solutions</button>
+  <button type="button" id="btn-ink" aria-pressed="false">B&amp;W ink</button>
+  <button type="button" id="btn-print">Print</button>
+  <button type="button" id="btn-pdf">Save as PDF</button>
+</div>
+
+<main class="sheet" id="sheet">
+
+  <header class="head">
+    <div>
+      <p class="kicker">AshPhys · Cambridge IGCSE Physics 0625 · revision</p>
+      <h1><span data-rough="double" data-color="red">Circular Motion</span></h1>
+      <p class="subtitle">one-page brain dump · lesson 3.7 · syllabus 1.5.1 &amp; 6.1.2 · leads straight into A Level ch. 16</p>
+    </div>
+    <div class="stamp" data-rough="circle" data-color="red" aria-label="Version: Circular Motion v1, October 2026">v1 <br>Oct 2026<small>Circular Motion</small></div>
+    <p class="legend">
+      <span><span class="tag core">0625</span> = in the IGCSE exam</span>
+      <span><span class="tag ext">★ ext</span> = extension (beyond 0625, needed for AS/A Level)</span>
+      <span><span class="blue">blue = velocity</span> · <span class="red">red = towards the centre</span> · <span class="green">green = components</span></span>
+    </p>
+  </header>
+
+  <div class="grid">
+
+    <!-- 0. What the exam asks -->
+    <section class="card wide" data-rough="box" data-color="green" aria-labelledby="h-exam">
+      <h2 id="h-exam"><span data-rough="underline" data-color="green">What the 0625 exam actually wants</span> <span class="tag core">0625</span></h2>
+      <div class="split r">
+        <div>
+          <p>An object moves in a circle at <b>constant speed</b> because a force acts on it <span class="hl" data-rough="highlight">perpendicular to its motion</span> — <b class="red">towards the centre</b>.</p>
+          <p>Speed stays the same but <b>direction</b> keeps changing → velocity is changing → it <span data-rough="circle" data-color="red">is accelerating</span>.</p>
+          <p class="note">no force towards the centre → no circle. It just goes straight on (Newton 1).</p>
+        </div>
+        <div>
+          <p><b>Describe it qualitatively</b> (mass <i>m</i>, speed <i>v</i>, radius <i>r</i>):</p>
+          <ul>
+            <li><b>Bigger force</b>, same <i>m</i> &amp; <i>r</i> → <b>faster</b></li>
+            <li><b>Bigger force</b>, same <i>m</i> &amp; <i>v</i> → <b>smaller radius</b> (tighter circle)</li>
+            <li><b>Bigger mass</b>, same <i>v</i> &amp; <i>r</i> → needs a <b>bigger force</b></li>
+          </ul>
+          <p class="amber" style="font: 600 20px/1.1 var(--font-head)">↳ all three come from F = mv²/r (box ③, ★ ext)</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1. Angles & angular motion -->
+    <section class="card" data-rough="box" data-color="blue" aria-labelledby="h-ang">
+      <h2 id="h-ang"><span class="num" data-rough="circle" data-color="red">1</span><span data-rough="underline" data-color="blue">Angles &amp; going round</span></h2>
+      <figure>
+        <svg class="dia" data-diagram="radian" viewBox="0 0 330 182" role="img" aria-labelledby="dia-rad-t dia-rad-d">
+          <title id="dia-rad-t">Definition of the radian</title>
+          <desc id="dia-rad-d">Two radii of length r enclose an arc of length s. The angle between them is theta equals s divided by r, in radians. When the arc equals the radius the angle is one radian, about 57 degrees.</desc>
+        </svg>
+      </figure>
+      <div class="eq-row">
+        <span class="eq" data-rough="box" data-color="blue">θ = s / r</span><span class="unit">rad</span>
+        <span class="tag ext">★ ext</span>
+      </div>
+      <p>1 turn = <b>2π rad</b> = 360° &nbsp;·&nbsp; 1 rad ≈ 57.3°</p>
+      <p><b>Period <i>T</i></b> = time for one full circle (s)<br><b>Frequency <i>f</i></b> = turns per second (Hz) → <span class="eq">f = 1/T</span></p>
+      <div class="eq-row">
+        <span class="eq" data-rough="box" data-color="blue">ω = Δθ/Δt = 2π/T = 2πf</span><span class="unit">rad/s</span>
+        <span class="tag ext">★ ext</span>
+      </div>
+      <p>ω = <b>angular speed</b>: angle swept per second. Every point on a spinning wheel has the <u>same ω</u>, but the rim has the biggest <i>v</i>:</p>
+      <div class="eq-row">
+        <span class="eq big" data-rough="circle" data-color="red">v = ωr</span>
+        <span class="eq" data-rough="box" data-color="green">v = 2πr / T</span><span class="tag core">0625</span>
+      </div>
+      <p class="note">v = 2πr/T is just distance ÷ time (circumference ÷ period). It's in 0625 for orbits!</p>
+
+      <div class="worked">
+        <p class="q"><b>Try it:</b> A fan spins at 600 revolutions per minute. The blade tip is 0.30 m from the axle. Find f, T, ω and the tip speed.</p>
+        <details>
+          <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+          <ol class="sol">
+            <li>f = 600 ÷ 60 = <b>10 Hz</b> → T = 1/f = <b>0.10 s</b></li>
+            <li>ω = 2πf = 2π × 10 = <b>62.8 rad/s</b></li>
+            <li>v = ωr = 62.8 × 0.30 = <span class="answer">18.8 m/s ≈ 19 m/s</span></li>
+            <li>check: v = 2πr/T = (2π × 0.30) ÷ 0.10 = 18.8 m/s ✓</li>
+          </ol>
+        </details>
+      </div>
+    </section>
+
+    <!-- 2. Kinematics -->
+    <section class="card" data-rough="box" data-color="red" aria-labelledby="h-kin">
+      <h2 id="h-kin"><span class="num" data-rough="circle" data-color="red">2</span><span data-rough="underline" data-color="red">Which way is <i>a</i>?</span></h2>
+      <figure>
+        <svg class="dia" data-diagram="motion" viewBox="0 0 320 272" role="img" aria-labelledby="dia-mot-t dia-mot-d">
+          <title id="dia-mot-t">Velocity and acceleration in uniform circular motion</title>
+          <desc id="dia-mot-d">An object moving anticlockwise round a circle of radius r, shown at two positions. At each, the velocity arrow is along the tangent and the acceleration and force arrow points along the radius to the centre, at right angles to the velocity.</desc>
+        </svg>
+        <figcaption>v along the tangent · a &amp; F to the centre</figcaption>
+      </figure>
+      <ul>
+        <li><b class="blue">velocity</b>: along the <span data-rough="underline" data-color="blue">tangent</span>, direction always changing</li>
+        <li><b class="red">acceleration</b>: always <span class="hl" data-rough="highlight">towards the centre</span> = <i>centripetal</i> ("centre-seeking")</li>
+        <li><b>a ⟂ v</b> → it changes the direction only, never the speed</li>
+      </ul>
+      <div class="eq-row">
+        <span class="eq big" data-rough="circle" data-color="red">a = v²/r = ω²r</span><span class="unit">m/s²</span>
+        <span class="tag ext">★ ext</span>
+      </div>
+      <p>Same speed, <b>half the radius</b> → <b>double</b> the acceleration. Tight bends are harder!</p>
+
+      <div class="worked">
+        <p class="q"><b>Try it:</b> A car goes round a bend of radius 50 m at a steady 15 m/s. Find its centripetal acceleration and its angular speed.</p>
+        <details>
+          <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+          <ol class="sol">
+            <li>a = v²/r = 15² ÷ 50 = 225 ÷ 50 = <span class="answer">4.5 m/s²</span> towards the centre of the bend</li>
+            <li>ω = v/r = 15 ÷ 50 = <span class="answer">0.30 rad/s</span></li>
+            <li>check: ω²r = 0.30² × 50 = 4.5 m/s² ✓ (the car's mass isn't needed)</li>
+          </ol>
+        </details>
+      </div>
+    </section>
+
+    <!-- 3. Forces -->
+    <section class="card wide" data-rough="box" data-color="red" aria-labelledby="h-force">
+      <h2 id="h-force"><span class="num" data-rough="circle" data-color="red">3</span><span data-rough="underline" data-color="red">Centripetal force</span> <span class="tag ext">★ ext</span></h2>
+      <div class="split">
+        <div>
+          <p>Newton 2: <b>resultant F = ma</b>, and <i>a</i> = v²/r, so the resultant force needed is</p>
+          <div class="eq-row">
+            <span class="eq big" data-rough="box" data-color="red">F = mv²/r = mω²r</span><span class="unit">N</span>
+          </div>
+          <p>It points <span class="hl" data-rough="highlight">towards the centre</span>, ⟂ to the velocity, so it does <b>no work</b>: speed (and KE) stay constant.</p>
+          <p class="note">"Centripetal" is a JOB, not a new force! Some real force (or forces) does the job ↓</p>
+          <table class="provider">
+            <thead><tr><th scope="col">situation</th><th scope="col">what pulls it to the centre?</th></tr></thead>
+            <tbody>
+              <tr><td>ball whirled on a string</td><td><b>tension</b> in the string</td></tr>
+              <tr><td>car on a flat bend</td><td><b>friction</b> (tyres on road)</td></tr>
+              <tr><td>Moon, planets, satellites</td><td><b>gravity</b></td></tr>
+              <tr><td>electron round a nucleus</td><td><b>electric</b> attraction</td></tr>
+              <tr><td>car on a banked track</td><td>horizontal part of the <b>normal force</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <figure>
+            <svg class="dia" data-diagram="snap" viewBox="0 0 300 152" role="img" aria-labelledby="dia-snap-t dia-snap-d">
+              <title id="dia-snap-t">What happens if the string snaps</title>
+              <desc id="dia-snap-d">A ball at the top of its circle when the string breaks. It moves off in a straight line along the tangent, not radially outwards.</desc>
+            </svg>
+            <figcaption>string snaps → straight line along the tangent</figcaption>
+          </figure>
+          <p>Double the speed → <b>4×</b> the force (v²). Halve the radius → <b>2×</b> the force.</p>
+          <div class="worked">
+            <p class="q"><b>Try it:</b> A 0.75 kg mass on a string moves in a horizontal circle of radius 1.1 m, making 12 revolutions every minute. Find the tension in the string.</p>
+            <details>
+              <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+              <ol class="sol">
+                <li>period T = 60 ÷ 12 = 5.0 s</li>
+                <li>ω = 2π/T = 2π ÷ 5.0 = 1.26 rad/s</li>
+                <li>tension provides the centripetal force: F = mω²r = 0.75 × 1.26² × 1.1</li>
+                <li><span class="answer">F ≈ 1.3 N</span> (towards the centre)</li>
+              </ol>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Real-world applications -->
+    <section class="card wide" data-rough="box" data-color="blue" aria-labelledby="h-apps">
+      <h2 id="h-apps"><span class="num" data-rough="circle" data-color="red">4</span><span data-rough="underline" data-color="blue">Real-world circles</span> <span class="tag ext">★ ext</span></h2>
+      <p>Method every time: <b>① draw the real forces</b> → <b>② find the resultant towards the centre</b> → <b>③ set it equal to mv²/r</b>.</p>
+
+      <div class="split">
+        <div>
+          <h3>Vertical circle (ball on a string)</h3>
+          <figure>
+            <svg class="dia" data-diagram="vertical" viewBox="0 0 360 312" role="img" aria-labelledby="dia-vert-t dia-vert-d">
+              <title id="dia-vert-t">Forces at the top and bottom of a vertical circle</title>
+              <desc id="dia-vert-d">At the top, tension and weight both point down towards the centre, so T plus mg equals m v squared over r and the tension is smallest. At the bottom, tension points up to the centre and weight points down, so T minus mg equals m v squared over r and the tension is largest.</desc>
+            </svg>
+          </figure>
+          <p>Just make it over the top when T = 0: <span class="eq" data-rough="box" data-color="red">v<sub>min</sub> = √(gr)</span></p>
+        </div>
+        <div>
+          <h3>Horizontal circles: roads</h3>
+          <figure>
+            <svg class="dia" data-diagram="flat" viewBox="0 0 300 172" role="img" aria-labelledby="dia-flat-t dia-flat-d">
+              <title id="dia-flat-t">A car on a flat bend, seen from above</title>
+              <desc id="dia-flat-d">The car moves along the bend with velocity v along the tangent. Sideways friction from the road on the tyres points towards the centre of the bend.</desc>
+            </svg>
+            <figcaption>flat bend, seen from above</figcaption>
+          </figure>
+          <figure>
+            <svg class="dia" data-diagram="banked" viewBox="0 0 300 206" role="img" aria-labelledby="dia-bank-t dia-bank-d">
+              <title id="dia-bank-t">A car on a banked track, seen from behind</title>
+              <desc id="dia-bank-d">The track is tilted at angle theta, rising away from the centre of the bend. The normal force N is perpendicular to the track. Its vertical component N cos theta balances the weight mg; its horizontal component N sin theta points towards the centre of the bend.</desc>
+            </svg>
+            <figcaption>banked track, seen from behind</figcaption>
+          </figure>
+          <ul>
+            <li><b>Flat:</b> friction = mv²/r. Too fast, or icy road → not enough friction → car skids <u>outwards along a tangent</u>.</li>
+            <li><b>Banked:</b> N cosθ = mg and N sinθ = mv²/r →
+              <span class="eq" data-rough="box" data-color="green">tanθ = v²/(rg)</span><br>at this "design speed" no friction is needed at all.</li>
+          </ul>
+          <div class="worked">
+            <p class="q"><b>Try it:</b> A bend of radius 80 m is designed for 20 m/s with no friction. At what angle should it be banked? (g = 9.8 m/s²)</p>
+            <details>
+              <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+              <ol class="sol">
+                <li>tanθ = v²/(rg) = 20² ÷ (80 × 9.8) = 400 ÷ 784 = 0.510</li>
+                <li>θ = tan⁻¹(0.510) = <span class="answer">27°</span></li>
+              </ol>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <h3>Worked example: the conical pendulum</h3>
+      <div class="split r">
+        <figure>
+          <svg class="dia" data-diagram="conical" viewBox="0 0 300 262" role="img" aria-labelledby="dia-con-t dia-con-d">
+            <title id="dia-con-t">Conical pendulum</title>
+            <desc id="dia-con-d">A bob on a string of length L hangs from a fixed point and moves in a horizontal circle of radius r, with the string at angle theta to the vertical. Tension T acts along the string; its vertical component T cos theta balances the weight mg and its horizontal component T sin theta points to the centre of the circle.</desc>
+          </svg>
+          <figcaption>the string sweeps out a cone</figcaption>
+        </figure>
+        <div>
+          <p>Resolve the tension <b>T</b>:</p>
+          <ul>
+            <li>vertical (no up/down motion): <span class="eq">T cosθ = mg</span></li>
+            <li>horizontal (to the centre): <span class="eq">T sinθ = mv²/r</span></li>
+            <li>divide: <span class="eq" data-rough="box" data-color="green">tanθ = v²/(rg)</span> and radius <span class="eq">r = L sinθ</span></li>
+          </ul>
+          <div class="worked">
+            <p class="q"><b>Try it:</b> A 0.20 kg bob on a 0.50 m string swings in a horizontal circle with the string at 30° to the vertical. Find the radius, the tension, the speed and the time for one revolution. (g = 9.8 m/s²)</p>
+            <details>
+              <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+              <ol class="sol">
+                <li>radius r = L sinθ = 0.50 × sin 30° = <b>0.25 m</b> (not 0.50 m!)</li>
+                <li>tension T = mg / cosθ = (0.20 × 9.8) ÷ cos 30° = <span class="answer">2.3 N</span></li>
+                <li>v² = rg tanθ = 0.25 × 9.8 × tan 30° = 1.41 → <span class="answer">v = 1.2 m/s</span></li>
+                <li>time for one turn = 2πr / v = (2π × 0.25) ÷ 1.19 = <span class="answer">1.3 s</span></li>
+              </ol>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Energy -->
+    <section class="card wide" data-rough="box" data-color="green" aria-labelledby="h-energy">
+      <h2 id="h-energy"><span class="num" data-rough="circle" data-color="red">5</span><span data-rough="underline" data-color="green">Energy in circles</span></h2>
+      <div class="split">
+        <div>
+          <ul>
+            <li><b>Uniform (horizontal) circle:</b> speed constant → <b>KE = ½mv² constant</b>. The centripetal force is ⟂ to the motion, so it does <span data-rough="circle" data-color="red">zero work</span>.</li>
+            <li><b>Vertical circle:</b> GPE changes with height, so the speed changes. Top: GPE max, KE min. Bottom: KE max.<br>
+              <span class="eq" data-rough="box" data-color="green">½mv<sub>bottom</sub>² = ½mv<sub>top</sub>² + mg(2r)</span> <span class="tag ext">★ ext</span></li>
+            <li><b>Orbits</b> <span class="tag core">0625</span>: circular orbit → speed and height constant → KE and GPE both constant. <b>Elliptical orbit</b> → closer to the Sun it goes <b>faster</b> (GPE → KE); further away it slows (KE → GPE). <span class="hl" data-rough="highlight">Total energy stays constant.</span></li>
+          </ul>
+          <figure>
+            <svg class="dia" data-diagram="orbit" viewBox="0 0 420 168" role="img" aria-labelledby="dia-orb-t dia-orb-d">
+              <title id="dia-orb-t">Energy in an elliptical orbit</title>
+              <desc id="dia-orb-d">A planet on an elliptical orbit with the Sun near one end. Close to the Sun the planet moves fast, with high kinetic energy and low gravitational potential energy. Far from the Sun it moves slowly, with low kinetic energy and high gravitational potential energy. The total energy is constant.</desc>
+            </svg>
+          </figure>
+        </div>
+        <div>
+          <div class="worked" style="margin-top:0">
+            <p class="q"><b>Try it:</b> A 0.10 kg ball on a 0.80 m string is swung in a vertical circle, only just keeping the string taut at the top. Find its speed at the top, its speed at the bottom and the tension at the bottom. (g = 9.8 m/s²)</p>
+            <details>
+              <summary><span class="when-closed">show solution</span><span class="when-open">hide solution</span></summary>
+              <ol class="sol">
+                <li>top, T = 0: mg = mv²/r → v<sub>top</sub> = √(gr) = √(9.8 × 0.80) = <span class="answer">2.8 m/s</span></li>
+                <li>energy, top → bottom (falls 2r = 1.6 m):<br>v<sub>bottom</sub>² = v<sub>top</sub>² + 2g(2r) = 7.84 + 31.36 = 39.2</li>
+                <li><span class="answer">v<sub>bottom</sub> = 6.3 m/s</span></li>
+                <li>bottom: T − mg = mv²/r → T = 0.98 + (0.10 × 39.2 ÷ 0.80) = 0.98 + 4.9 = <span class="answer">5.9 N</span> — six times the weight!</li>
+              </ol>
+            </details>
+          </div>
+          <p class="note">Energy gives the SPEED. F = mv²/r then gives the FORCE. Use both!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Key equations -->
+    <section class="card wide sticky" data-rough="box" data-color="amber" aria-labelledby="h-eq">
+      <h2 id="h-eq"><span class="num" data-rough="circle" data-color="red">6</span><span data-rough="double" data-color="red">Key equations — learn these!</span></h2>
+      <table class="keyeq">
+        <thead><tr><th scope="col">quantity</th><th scope="col">equation</th><th scope="col">unit</th><th scope="col" class="hide-sm">level</th></tr></thead>
+        <tbody>
+          <tr><td>speed round a circle / orbit</td><td class="f"><span data-rough="highlight">v = 2πr / T</span></td><td>m/s</td><td class="hide-sm"><span class="tag core">0625</span></td></tr>
+          <tr><td>frequency &amp; period</td><td class="f">f = 1 / T</td><td>Hz, s</td><td class="hide-sm"><span class="tag core">0625</span></td></tr>
+          <tr><td>angle in radians</td><td class="f">θ = s / r &nbsp;(2π rad = 360°)</td><td>rad</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>angular speed</td><td class="f"><span data-rough="highlight">ω = 2π / T = 2πf</span></td><td>rad/s</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>linear ↔ angular speed</td><td class="f"><span data-rough="highlight">v = ωr</span></td><td>m/s</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>centripetal acceleration</td><td class="f"><span data-rough="highlight">a = v²/r = ω²r</span></td><td>m/s²</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>centripetal force</td><td class="f"><span data-rough="highlight">F = mv²/r = mω²r</span></td><td>N</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>period from r and v</td><td class="f">T = 2πr / v = 2π / ω</td><td>s</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+          <tr><td>banked track / conical pendulum</td><td class="f">tanθ = v² / (rg)</td><td>—</td><td class="hide-sm"><span class="tag ext">★ ext</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7. Misconceptions -->
+    <section class="card wide" data-rough="box" data-color="red" aria-labelledby="h-mis">
+      <h2 id="h-mis"><span class="num" data-rough="circle" data-color="red">7</span><span data-rough="underline" data-color="red">Traps &amp; tips</span></h2>
+      <ul class="mis">
+        <li><span class="x">"There's an outward centrifugal force."</span>
+          <span class="ok">No outward force acts. You <i>feel</i> thrown out because your body tries to go straight on (inertia) while the car turns.</span></li>
+        <li><span class="x">Adding "F<sub>c</sub>" as an extra arrow on a force diagram.</span>
+          <span class="ok">Draw only real forces (tension, weight, friction, normal). Their resultant <i>is</i> the centripetal force.</span></li>
+        <li><span class="x">"Constant speed, so no acceleration."</span>
+          <span class="ok">Velocity is a vector. Changing direction = accelerating, towards the centre.</span></li>
+        <li><span class="x">"If the string breaks it flies straight outwards."</span>
+          <span class="ok">It leaves along the <b>tangent</b>, in the direction it was moving at that instant.</span></li>
+        <li><span class="x">F = mv/r or F = mv² (forgetting a bit).</span>
+          <span class="ok">F = <b>m</b> × <b>v²/r</b>: it's still F = ma, with a = v²/r. Check units: kg × m²/s² ÷ m = kg m/s² = N.</span></li>
+        <li><span class="x">Using degrees in ω, or the calculator in the wrong mode.</span>
+          <span class="ok">ω is in <b>rad/s</b>. rpm → ω: ÷ 60 then × 2π. Use DEG mode for sin 30°, RAD mode if the angle is in radians.</span></li>
+        <li><span class="x">Using the diameter, or the string length L, as r.</span>
+          <span class="ok">r is the radius of <i>the circle the object travels</i>. Conical pendulum: r = L sinθ.</span></li>
+        <li><span class="x">Mixing up the two T's.</span>
+          <span class="ok"><i>T</i> = period (s) in v = 2πr/T, but <i>T</i> = tension (N) on force diagrams. Write "period" or "tension" in words when both appear.</span></li>
+      </ul>
+    </section>
+
+  </div>
+
+  <footer class="foot">
+    <div class="qr" id="qr" hidden role="img" aria-label="QR code linking to the circular motion lesson on AshPhys"></div>
+    <div>
+      <b>Full lesson, practice questions &amp; the 3D circular motion lab:</b><br>
+      <a id="lesson-link" href="https://www.ashphys.org/lessons/db2c98d5-dd86-5faf-9121-5533bdd5d212?c=igcse">ashphys.org/lessons/…circular-motion</a> ·
+      <a href="https://www.ashphys.org/simulations/circular-motion">3D lab</a><br>
+      <span class="unit">Circular Motion v1 – Oct 2026 · g = 9.8 m/s² throughout</span>
+    </div>
+    <div class="sig">— AshPhys ✎</div>
+  </footer>
+</main>
+
+<noscript><p style="text-align:center;font-family:sans-serif">Turn on JavaScript to see the hand-drawn diagrams and the worked-example toggles. Everything else still works.</p></noscript>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  'use strict';
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  var LESSON_URL = 'https://www.ashphys.org/lessons/db2c98d5-dd86-5faf-9121-5533bdd5d212?c=igcse';
+
+  /* If the Rough.js CDN can't be reached, draw the same shapes with plain,
+     tidy SVG so the diagrams still make sense (graceful degradation). */
+  if (!window.rough) {
+    window.rough = {
+      svg: function (svg, cfg) {
+        var base = (cfg && cfg.options) || {};
+        function el(tag, attrs, o) {
+          o = Object.assign({}, base, o || {});
+          var n = document.createElementNS(SVGNS, tag);
+          Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+          n.setAttribute('stroke', o.stroke || '#000');
+          n.setAttribute('stroke-width', o.strokeWidth || 1);
+          n.setAttribute('fill', o.fill && o.fillStyle ? o.fill : 'none');
+          n.setAttribute('stroke-linecap', 'round');
+          if (o.strokeLineDash) n.setAttribute('stroke-dasharray', o.strokeLineDash.join(' '));
+          return n;
+        }
+        return {
+          line: function (x1, y1, x2, y2, o) { return el('line', { x1: x1, y1: y1, x2: x2, y2: y2 }, o); },
+          rectangle: function (x, y, w, h, o) { return el('rect', { x: x, y: y, width: w, height: h }, o); },
+          circle: function (cx, cy, d, o) { return el('circle', { cx: cx, cy: cy, r: d / 2 }, o); },
+          ellipse: function (cx, cy, w, h, o) { return el('ellipse', { cx: cx, cy: cy, rx: w / 2, ry: h / 2 }, o); },
+          polygon: function (pts, o) { return el('polygon', { points: pts.map(function (p) { return p.join(','); }).join(' ') }, o); },
+          path: function (d, o) { return el('path', { d: d }, o); },
+          arc: function (cx, cy, w, h, a0, a1, closed, o) {
+            var rx = w / 2, ry = h / 2;
+            var d = 'M' + (cx + rx * Math.cos(a0)) + ' ' + (cy + ry * Math.sin(a0)) +
+              ' A' + rx + ' ' + ry + ' 0 ' + (a1 - a0 > Math.PI ? 1 : 0) + ' 1 ' +
+              (cx + rx * Math.cos(a1)) + ' ' + (cy + ry * Math.sin(a1));
+            return el('path', { d: d }, o);
+          }
+        };
+      }
+    };
+  }
+
+  var root = document.documentElement;
+  function ink(name) { return getComputedStyle(root).getPropertyValue('--' + name).trim() || '#1c2748'; }
+  function svgEl(tag, attrs) {
+    var n = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    return n;
+  }
+  // Annotation strokes are drawn in a stretched viewBox; keep their pen width.
+  function fixStrokes(svg) {
+    svg.querySelectorAll('path, line, rect, ellipse, circle, polygon').forEach(function (p) {
+      p.setAttribute('vector-effect', 'non-scaling-stroke');
+    });
+  }
+
+  /* ---------- hand-drawn annotations: boxes, underlines, circles, highlighter ---------- */
+  var PAD = { box: 3, underline: 5, double: 8, circle: 9, highlight: 3 };
+
+  function annotate(el, i) {
+    var old = el.querySelector(':scope > svg.ann');
+    if (old) old.remove();
+    if (!el.getClientRects().length) return; // inside a closed <details>
+    var type = el.dataset.rough;
+    var color = ink(el.dataset.color || 'ink');
+    var p = PAD[type] || 4;
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var W = w + 2 * p, H = h + 2 * p;
+    var svg = svgEl('svg', { class: 'ann', 'aria-hidden': 'true', viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
+    svg.style.left = svg.style.top = (-p) + 'px';
+    svg.style.width = 'calc(100% + ' + 2 * p + 'px)';
+    svg.style.height = 'calc(100% + ' + 2 * p + 'px)';
+    var rc = rough.svg(svg, { options: { seed: i + 7, stroke: color } });
+    var n = [];
+    if (type === 'box') {
+      n.push(rc.rectangle(2, 2, W - 4, H - 4, { roughness: 1.3, bowing: 1.4, strokeWidth: 1.7 }));
+    } else if (type === 'underline') {
+      n.push(rc.line(p - 3, H - p + 2, W - p + 4, H - p + 4, { roughness: 1.6, bowing: 2, strokeWidth: 2.4 }));
+    } else if (type === 'double') {
+      n.push(rc.line(p - 4, H - p + 1, W - p + 6, H - p + 3, { roughness: 1.6, bowing: 2, strokeWidth: 2.4 }));
+      n.push(rc.line(p + 8, H - p + 6, W - p - 2, H - p + 8, { roughness: 1.8, bowing: 2, strokeWidth: 1.8 }));
+    } else if (type === 'circle') {
+      n.push(rc.ellipse(W / 2, H / 2, W - 3, H - 3, { roughness: 1.4, strokeWidth: 1.9 }));
+    } else if (type === 'highlight') {
+      n.push(rc.rectangle(p - 3, p + h * 0.28, w + 6, h * 0.72, {
+        stroke: 'none', fill: ink(el.dataset.hl || 'hl'), fillStyle: 'solid', roughness: 2.2, bowing: 3
+      }));
+    }
+    n.forEach(function (x) { svg.appendChild(x); });
+    fixStrokes(svg);
+    el.appendChild(svg);
+  }
+  function annotateAll() {
+    document.querySelectorAll('[data-rough]').forEach(annotate);
+  }
+
+  /* ---------- diagram pen ---------- */
+  function pen(svg, seed) {
+    var rc = rough.svg(svg, { options: { seed: seed, roughness: 1.05, bowing: 1, strokeWidth: 1.8 } });
+    function o2(o) {
+      o = o || {};
+      var r = { stroke: ink(o.c || 'ink'), strokeWidth: o.w || 1.8 };
+      if (o.dash) r.strokeLineDash = [7, 6];
+      if (o.rough != null) r.roughness = o.rough;
+      if (o.fill) { r.fill = ink(o.fill); r.fillStyle = o.fillStyle || 'solid'; if (o.gap) r.hachureGap = o.gap; }
+      return r;
+    }
+    function add(n) { svg.appendChild(n); return n; }
+    var api = {
+      line: function (x1, y1, x2, y2, o) { return add(rc.line(x1, y1, x2, y2, o2(o))); },
+      circle: function (cx, cy, d, o) { return add(rc.circle(cx, cy, d, o2(o))); },
+      ellipse: function (cx, cy, w, h, o) { return add(rc.ellipse(cx, cy, w, h, o2(o))); },
+      arc: function (cx, cy, w, h, a0, a1, o) { return add(rc.arc(cx, cy, w, h, a0, a1, false, o2(o))); },
+      poly: function (pts, o) { return add(rc.polygon(pts, o2(o))); },
+      dot: function (cx, cy, r, c) { return add(rc.circle(cx, cy, 2 * r, o2({ c: c || 'ink', fill: c || 'ink', w: 1, rough: 0.6 }))); },
+      arrow: function (x1, y1, x2, y2, o) {
+        o = o || {};
+        api.line(x1, y1, x2, y2, o);
+        var a = Math.atan2(y2 - y1, x2 - x1), L = o.head || 12, s = 0.42;
+        return api.poly([[x2, y2], [x2 - L * Math.cos(a - s), y2 - L * Math.sin(a - s)], [x2 - L * Math.cos(a + s), y2 - L * Math.sin(a + s)]],
+          { c: o.c, fill: o.c || 'ink', w: 1.2, rough: 0.5 });
+      },
+      text: function (x, y, str, o) {
+        o = o || {};
+        var t = svgEl('text', {
+          x: x, y: y, 'text-anchor': o.a || 'start', 'font-size': o.s || 15, 'font-weight': o.b ? 600 : 400, fill: ink(o.c || 'ink'),
+          // a paper-coloured halo, so a label written over a dashed line stays readable
+          stroke: ink('paper'), 'stroke-width': 4, 'stroke-linejoin': 'round', 'paint-order': 'stroke'
+        });
+        if (o.head) t.setAttribute('style', 'font-family: var(--font-head)');
+        t.textContent = str;
+        return add(t);
+      }
+    };
+    return api;
+  }
+  function P(cx, cy, r, deg) { var a = deg * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+
+  var DIAGRAMS = {
+    radian: function (d) {
+      var cx = 40, cy = 160, R = 125, A = 180 / Math.PI;
+      var p1 = P(cx, cy, R, 0), p2 = P(cx, cy, R, -A);
+      d.line(cx, cy, p1[0], p1[1], { c: 'ink-2' });
+      d.line(cx, cy, p2[0], p2[1], { c: 'ink-2' });
+      d.arc(cx, cy, 2 * R, 2 * R, -1, 0, { c: 'blue', w: 3 });
+      d.arc(cx, cy, 64, 64, -1, 0, { c: 'red', w: 1.6 });
+      d.dot(cx, cy, 3);
+      var t = P(cx, cy, 48, -28.6); d.text(t[0], t[1] + 5, 'θ', { c: 'red', s: 18, b: 1 });
+      var s = P(cx, cy, R + 14, -28.6); d.text(s[0], s[1] + 4, 's', { c: 'blue', s: 19, b: 1 });
+      d.text(102, 178, 'r', { s: 17 });
+      d.text(60, 100, 'r', { s: 17 });
+      d.text(192, 36, 'θ = s / r', { s: 19, b: 1 });
+      d.text(192, 62, 'θ in radians!', { c: 'red', s: 22, head: 1 });
+      d.text(192, 92, 's = r  →  θ = 1 rad', { s: 14 });
+      d.text(192, 114, 'full circle:', { s: 14 });
+      d.text(192, 134, 's = 2πr → θ = 2π', { s: 14 });
+    },
+    motion: function (d) {
+      var cx = 150, cy = 135, R = 95;
+      d.circle(cx, cy, 2 * R, { c: 'ink-2', dash: 1, w: 1.5 });
+      d.dot(cx, cy, 3.5);
+      d.text(cx, cy + 19, 'centre', { s: 12, c: 'ink-2', a: 'middle' });
+      var r1 = P(cx, cy, R, 20);
+      d.line(cx, cy, r1[0], r1[1], { c: 'ink-2', w: 1.4 });
+      var rl = P(cx, cy, R * 0.55, 20); d.text(rl[0], rl[1] + 17, 'r', { s: 17 });
+      [[-45, 70, 52], [160, 64, 52]].forEach(function (k, i) {
+        var phi = k[0] * Math.PI / 180, o = P(cx, cy, R, k[0]);
+        var tx = Math.sin(phi), ty = -Math.cos(phi);
+        var v = [o[0] + tx * k[1], o[1] + ty * k[1]];
+        var a = [o[0] - Math.cos(phi) * k[2], o[1] - Math.sin(phi) * k[2]];
+        d.arrow(o[0], o[1], v[0], v[1], { c: 'blue', w: 2.6 });
+        d.arrow(o[0], o[1], a[0], a[1], { c: 'red', w: 2.6 });
+        d.dot(o[0], o[1], 7, 'ink');
+        if (i === 0) {
+          d.text(v[0] - 6, v[1] + 4, 'v', { c: 'blue', s: 20, b: 1, a: 'end' });
+          d.text(a[0] + 10, a[1] + 12, 'a, F', { c: 'red', s: 17, b: 1 });
+          d.text(o[0] + 14, o[1] - 4, '90°', { c: 'ink-2', s: 12 });
+        } else {
+          d.text(v[0] + 8, v[1], 'v', { c: 'blue', s: 20, b: 1 });
+          d.text(o[0] + 22, o[1] + 26, 'a, F', { c: 'red', s: 17, b: 1 });
+        }
+      });
+      // direction of travel
+      d.arc(cx, cy, 2 * (R + 20), 2 * (R + 20), -165 * Math.PI / 180, -118 * Math.PI / 180, { c: 'ink-2', w: 1.4 });
+      var e = P(cx, cy, R + 20, -165), e0 = P(cx, cy, R + 20, -158);
+      d.arrow(e0[0], e0[1], e[0], e[1], { c: 'ink-2', w: 1.4, head: 9 });
+      d.text(22, 36, 'anticlockwise', { c: 'ink-2', s: 18, head: 1 });
+    },
+    snap: function (d) {
+      var cx = 80, cy = 98, R = 48;
+      d.circle(cx, cy, 2 * R, { c: 'ink-2', dash: 1, w: 1.4 });
+      d.dot(cx, cy, 3);
+      d.line(cx, cy, cx, cy - R + 14, { c: 'ink-2', w: 1.4 });
+      d.text(cx - 8, cy - 12, 'snap!', { c: 'red', s: 18, head: 1, a: 'end' });
+      d.arrow(cx, cy - R, 236, cy - R, { c: 'green', w: 2.4, dash: 1 });
+      d.text(132, cy - R + 22, '✓ along the tangent', { c: 'green', s: 14, b: 1 });
+      d.arrow(cx, cy - R, cx, 10, { c: 'red', w: 2 });
+      d.line(cx - 11, 17, cx + 11, 37, { c: 'red', w: 2.6 });
+      d.line(cx + 11, 17, cx - 11, 37, { c: 'red', w: 2.6 });
+      d.text(cx + 18, 22, '✗ not outwards', { c: 'red', s: 14, b: 1 });
+      d.dot(cx, cy - R, 7, 'ink');
+    },
+    vertical: function (d) {
+      var cx = 120, cy = 155, R = 100;
+      d.circle(cx, cy, 2 * R, { c: 'ink-2', dash: 1, w: 1.4 });
+      d.line(cx, cy, cx, cy - R, { c: 'ink-2', w: 1.3 });
+      d.line(cx, cy, cx, cy + R, { c: 'ink-2', w: 1.3 });
+      d.dot(cx, cy, 3.5);
+      // top
+      d.arrow(cx - 7, cy - R + 7, cx - 7, cy - R + 50, { c: 'red', w: 2.6 });
+      d.arrow(cx + 7, cy - R + 7, cx + 7, cy - R + 38, { c: 'ink-2', w: 2.4 });
+      d.text(cx - 14, cy - R + 46, 'T', { c: 'red', s: 18, b: 1, a: 'end' });
+      d.text(cx + 14, cy - R + 36, 'mg', { s: 16, b: 1 });
+      d.arrow(cx, cy - R, cx - 55, cy - R, { c: 'blue', w: 2.4 });
+      d.text(cx - 60, cy - R - 8, 'v', { c: 'blue', s: 18, b: 1 });
+      d.dot(cx, cy - R, 7, 'ink');
+      // bottom
+      d.arrow(cx, cy + R - 7, cx, cy + R - 62, { c: 'red', w: 2.6 });
+      d.arrow(cx, cy + R + 7, cx, cy + R + 44, { c: 'ink-2', w: 2.4 });
+      d.text(cx - 8, cy + R - 40, 'T', { c: 'red', s: 18, b: 1, a: 'end' });
+      d.text(cx + 8, cy + R + 40, 'mg', { s: 16, b: 1 });
+      d.arrow(cx, cy + R, cx + 55, cy + R, { c: 'blue', w: 2.4 });
+      d.text(cx + 58, cy + R - 6, 'v', { c: 'blue', s: 18, b: 1 });
+      d.dot(cx, cy + R, 7, 'ink');
+      // notes
+      d.text(238, 46, 'TOP', { c: 'red', s: 24, head: 1 });
+      d.text(238, 70, 'T + mg = mv²/r', { s: 15, b: 1 });
+      d.text(238, 92, '→ T smallest', { s: 14 });
+      d.text(238, 205, 'BOTTOM', { c: 'red', s: 24, head: 1 });
+      d.text(238, 229, 'T − mg = mv²/r', { s: 15, b: 1 });
+      d.text(238, 251, '→ T biggest', { s: 14 });
+      d.text(238, 272, '(snaps here!)', { c: 'red', s: 18, head: 1 });
+    },
+    flat: function (d) {
+      var cx = 150, cy = 150, D2R = Math.PI / 180;
+      d.arc(cx, cy, 170, 170, 200 * D2R, 340 * D2R, { c: 'ink-2', w: 1.5 });
+      d.arc(cx, cy, 250, 250, 197 * D2R, 343 * D2R, { c: 'ink-2', w: 1.5 });
+      d.arc(cx, cy, 210, 210, 199 * D2R, 341 * D2R, { c: 'ink-2', w: 1, dash: 1 });
+      d.poly([[134, 38], [166, 38], [166, 54], [134, 54]], { c: 'ink', fill: 'blue', fillStyle: 'hachure', gap: 4, w: 1.6 });
+      d.arrow(168, 46, 232, 46, { c: 'blue', w: 2.6 });
+      d.text(238, 52, 'v', { c: 'blue', s: 19, b: 1 });
+      d.arrow(150, 57, 150, 138, { c: 'green', w: 2.8 });
+      d.text(158, 104, 'friction', { c: 'green', s: 15, b: 1 });
+      d.dot(cx, cy, 3.5);
+      d.text(cx, cy + 19, 'centre of the bend', { s: 12, c: 'ink-2', a: 'middle' });
+    },
+    banked: function (d) {
+      var ux = 0.906, uy = -0.423, nx = -0.423, ny = -0.906;
+      d.line(8, 180, 292, 180, { c: 'ink-2', w: 1.5 });
+      d.line(20, 180, 290, 54, { c: 'ink', w: 2.4 });
+      var bx = 169.5, by = 110.2;
+      var c1 = [bx - ux * 22, by - uy * 22], c2 = [bx + ux * 22, by + uy * 22];
+      d.poly([c1, c2, [c2[0] + nx * 20, c2[1] + ny * 20], [c1[0] + nx * 20, c1[1] + ny * 20]], { c: 'ink', fill: 'blue', fillStyle: 'hachure', gap: 4, w: 1.6 });
+      var mx = bx + nx * 10, my = by + ny * 10;
+      var N = [mx + nx * 95, my + ny * 95];
+      d.line(N[0], my, N[0], N[1], { c: 'green', dash: 1, w: 1.2 });
+      d.arrow(mx, my, N[0], my, { c: 'green', w: 2.4, head: 10 });
+      d.arrow(mx, my, N[0], N[1], { c: 'red', w: 2.8 });
+      d.arrow(mx, my, mx, my + 55, { c: 'ink-2', w: 2.6 });
+      d.text(N[0] - 8, N[1] + 8, 'N', { c: 'red', s: 19, b: 1, a: 'end' });
+      d.text(N[0] - 6, (my + N[1]) / 2, 'N cosθ', { c: 'green', s: 13, b: 1, a: 'end' });
+      d.text(N[0] - 6, my + 5, 'N sinθ', { c: 'green', s: 13, b: 1, a: 'end' });
+      d.text(mx + 8, my + 52, 'mg', { s: 16, b: 1 });
+      d.arc(20, 180, 120, 120, -0.436, 0, { c: 'red', w: 1.6 });
+      var t = P(20, 180, 72, -12.5); d.text(t[0], t[1] + 6, 'θ', { c: 'red', s: 18, b: 1 });
+      d.text(8, 199, '← centre of the bend is this way', { s: 12, c: 'ink-2' });
+    },
+    conical: function (d) {
+      var px = 130, py = 32, L = 170, th = 30 * Math.PI / 180;
+      var bx = px + L * Math.sin(th), by = py + L * Math.cos(th);
+      d.line(84, py, 176, py, { c: 'ink', w: 2.2 });
+      for (var x = 88; x <= 172; x += 12) d.line(x, py, x + 8, py - 10, { c: 'ink-2', w: 1 });
+      d.ellipse(px, by, 2 * (bx - px), 34, { c: 'ink-2', dash: 1, w: 1.4 });
+      d.line(px, py, px, by, { c: 'ink-2', dash: 1, w: 1.2 });
+      d.line(px, by, px - (bx - px), by, { c: 'ink-2', w: 1.4 });
+      d.text(px - (bx - px) / 2, by - 6, 'r', { s: 17, a: 'middle' });
+      d.dot(px, by, 2.5, 'ink-2');
+      d.line(px, py, bx, by, { c: 'ink-2', w: 1.5 });
+      d.text(150, 86, 'L', { s: 17, a: 'end' });
+      d.arc(px, py, 74, 74, Math.PI / 3, Math.PI / 2, { c: 'red', w: 1.5 });
+      var t = P(px, py, 50, 76); d.text(t[0], t[1] + 4, 'θ', { c: 'red', s: 17, b: 1 });
+      var Tx = bx - 0.5 * 90, Ty = by - 0.866 * 90;
+      d.line(bx, by, bx, Ty, { c: 'green', dash: 1, w: 1.6 });
+      d.line(bx, by, Tx, by, { c: 'green', dash: 1, w: 1.6 });
+      d.arrow(bx, by, bx, Ty, { c: 'green', w: 2, head: 9 });
+      d.arrow(bx, by, Tx, by, { c: 'green', w: 2, head: 9 });
+      d.arrow(bx, by, Tx, Ty, { c: 'red', w: 3 });
+      d.arrow(bx, by, bx, by + 60, { c: 'ink-2', w: 2.4 });
+      d.dot(bx, by, 8, 'ink');
+      d.text(Tx + 10, Ty + 8, 'T', { c: 'red', s: 19, b: 1 });
+      d.text(bx + 7, (Ty + by) / 2, 'T cosθ', { c: 'green', s: 13, b: 1 });
+      d.text((Tx + bx) / 2, by + 21, 'T sinθ', { c: 'green', s: 13, b: 1, a: 'middle' });
+      d.text(bx + 8, by + 56, 'mg', { s: 16, b: 1 });
+    },
+    orbit: function (d) {
+      var sx = 120, sy = 80;
+      d.ellipse(212, 80, 220, 120, { c: 'ink-2', dash: 1, w: 1.4 });
+      d.circle(sx, sy, 18, { c: 'amber', fill: 'amber', fillStyle: 'hachure', gap: 3, w: 1.6 });
+      d.text(sx + 12, sy + 24, 'Sun', { s: 13, c: 'ink-2' });
+      d.arrow(102, 80, 102, 140, { c: 'blue', w: 2.6 });
+      d.dot(102, 80, 6, 'blue');
+      d.arrow(322, 80, 322, 56, { c: 'blue', w: 2.2, head: 9 });
+      d.dot(322, 80, 6, 'blue');
+      d.text(6, 70, 'close: FAST', { s: 13, b: 1, c: 'blue' });
+      d.text(6, 90, 'KE ↑  GPE ↓', { s: 13 });
+      d.text(334, 76, 'far: slow', { s: 13, b: 1, c: 'blue' });
+      d.text(334, 96, 'KE ↓  GPE ↑', { s: 13 });
+      d.text(212, 162, 'KE + GPE = constant', { s: 21, head: 1, a: 'middle', c: 'green' });
+    }
+  };
+
+  function drawDiagrams() {
+    document.querySelectorAll('svg[data-diagram]').forEach(function (svg, i) {
+      Array.prototype.slice.call(svg.childNodes).forEach(function (n) {
+        if (n.nodeName !== 'title' && n.nodeName !== 'desc') svg.removeChild(n);
+      });
+      var fn = DIAGRAMS[svg.dataset.diagram];
+      if (fn) fn(pen(svg, 11 + i * 5));
+    });
+  }
+
+  function drawAll() { drawDiagrams(); annotateAll(); }
+
+  var t;
+  function redrawSoon() { clearTimeout(t); t = setTimeout(annotateAll, 120); }
+  window.addEventListener('resize', redrawSoon);
+  document.querySelectorAll('details').forEach(function (d) { d.addEventListener('toggle', redrawSoon); });
+  drawAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(annotateAll);
+
+  /* ---------- toolbar ---------- */
+  var details = Array.prototype.slice.call(document.querySelectorAll('.worked details'));
+  var btnSol = document.getElementById('btn-solutions');
+  btnSol.addEventListener('click', function () {
+    var open = btnSol.getAttribute('aria-pressed') !== 'true';
+    details.forEach(function (d) { d.open = open; });
+    btnSol.setAttribute('aria-pressed', String(open));
+    btnSol.textContent = open ? 'Hide all solutions' : 'Show all solutions';
+  });
+
+  var btnInk = document.getElementById('btn-ink');
+  function setInk(mono) {
+    if (mono) root.setAttribute('data-ink', 'mono'); else root.removeAttribute('data-ink');
+    btnInk.setAttribute('aria-pressed', String(mono));
+    try { localStorage.setItem('cm-cheatsheet-ink', mono ? 'mono' : 'colour'); } catch (e) {}
+    drawAll();
+  }
+  btnInk.addEventListener('click', function () { setInk(btnInk.getAttribute('aria-pressed') !== 'true'); });
+  try { if (localStorage.getItem('cm-cheatsheet-ink') === 'mono') setInk(true); } catch (e) {}
+
+  // Print shows every solution; put the reader's own choice back afterwards.
+  var saved = null;
+  function openAll() { saved = details.map(function (d) { return d.open; }); details.forEach(function (d) { d.open = true; }); annotateAll(); }
+  function restore() { if (saved) details.forEach(function (d, i) { d.open = saved[i]; }); saved = null; annotateAll(); }
+  window.addEventListener('beforeprint', openAll);
+  window.addEventListener('afterprint', restore);
+  document.getElementById('btn-print').addEventListener('click', function () { window.print(); });
+
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = src; s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  var btnPdf = document.getElementById('btn-pdf');
+  btnPdf.addEventListener('click', function () {
+    var label = btnPdf.textContent;
+    btnPdf.textContent = 'Making PDF…';
+    btnPdf.disabled = true;
+    var p = window.html2pdf ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js');
+    p.then(function () {
+      openAll();
+      document.body.classList.add('exporting');
+      window.scrollTo(0, 0);
+      var sheet = document.getElementById('sheet');
+      // Lay the page out at the PDF's content width (A4 minus margins, in CSS
+      // px) so html2pdf's copy matches what is measured below.
+      sheet.style.width = sheet.style.maxWidth = Math.floor((210 - 12) / 25.4 * 96) + 'px';
+      annotateAll();
+      // html2canvas copes badly with inline SVG (percent sizes, hand-drawn
+      // paths), so in the cloned page each SVG becomes an <img> of itself at
+      // its exact on-screen size.
+      var svgs = Array.prototype.map.call(sheet.querySelectorAll('svg'), function (el) {
+        var r = el.getBoundingClientRect();
+        var copy = el.cloneNode(true);
+        copy.setAttribute('xmlns', SVGNS);
+        copy.setAttribute('width', r.width);
+        copy.setAttribute('height', r.height);
+        copy.removeAttribute('style');
+        // An SVG drawn as an image can't see the page's web fonts.
+        var st = document.createElementNS(SVGNS, 'style');
+        st.textContent = "text { font-family: 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', cursive; }";
+        copy.insertBefore(st, copy.firstChild);
+        return {
+          src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(copy)),
+          w: r.width, h: r.height, cls: el.getAttribute('class') || '', css: el.style.cssText
+        };
+      });
+      return window.html2pdf().set({
+        margin: [6, 6, 8, 6],
+        filename: 'circular-motion-cheatsheet.pdf',
+        image: { type: 'jpeg', quality: 0.96 },
+        html2canvas: {
+          scale: 2, useCORS: true, backgroundColor: null, scrollX: 0, scrollY: 0,
+          onclone: function (doc) {
+            doc.querySelectorAll('.html2pdf__container svg').forEach(function (el, i) {
+              var info = svgs[i];
+              if (!info || !info.w) return;
+              var img = doc.createElement('img');
+              img.src = info.src;
+              img.alt = '';
+              img.className = info.cls;
+              img.style.cssText = info.css;
+              img.style.display = 'block';
+              img.style.width = info.w + 'px';
+              img.style.height = info.h + 'px';
+              el.parentNode.replaceChild(img, el);
+            });
+          }
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['.worked', 'figure', 'tr', '.mis li', 'h2', 'h3'] }
+      }).from(sheet).save();
+    }).catch(function () {
+      // No network for the PDF library: the browser's own Print → Save as PDF works offline.
+      window.print();
+    }).then(function () {
+      document.body.classList.remove('exporting');
+      var sheet = document.getElementById('sheet');
+      sheet.style.width = sheet.style.maxWidth = '';
+      restore();
+      btnPdf.textContent = label;
+      btnPdf.disabled = false;
+    });
+  });
+
+  /* ---------- QR code to the full lesson ---------- */
+  loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js').then(function () {
+    var qr = window.qrcode(0, 'M');
+    qr.addData(LESSON_URL);
+    qr.make();
+    var box = document.getElementById('qr');
+    box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    box.hidden = false;
+  }).catch(function () { /* the link text is still there */ });
+})();
+</script>
+</body>
+</html>
