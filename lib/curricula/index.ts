@@ -72,7 +72,7 @@ export const CURRICULA: Record<CurriculumId, Curriculum> = {
     shortName: 'A Level',
     syllabusCode: '9702',
     syllabusLabel: '9702 A Level',
-    description: 'Cambridge International A Level Physics: every AS topic plus the A Level topics 12–25',
+    description: 'Cambridge International A Level Physics: every AS chapter plus the A Level chapters 16–31',
     gradeLevel: '12',
     priority: 2,
     topicCodeColumn: 'a_level_topic_code',
@@ -177,20 +177,32 @@ export function findSection(
 }
 
 /**
+ * Splits a topic code into its comparable parts. The coursebook's practical
+ * skills chapters are lettered (P1, P2) but sit between numbered chapters —
+ * P1 after chapter 15, P2 after chapter 31 — so they sort as 15.5 and 31.5.
+ */
+function splitCode(code: string): string[] {
+  const parts = code.split('.');
+  if (parts[0] === 'P1') parts[0] = '15.5';
+  else if (parts[0] === 'P2') parts[0] = '31.5';
+  return parts;
+}
+
+/**
  * Orders topic codes the way a syllabus does: numerically part by part, so
  * 1.10 follows 1.9, and 10.1 follows 9.3. IB letters sort alphabetically
  * (A.1 … E.5). Skills codes (Maths, Tool 3) come first, as the groundwork,
  * and lessons with no code at all come last.
  */
 export function compareTopicCodes(a: string | null, b: string | null): number {
-  const group = (code: string | null) => (!code ? 2 : /^(\d+|[A-Z])(\.\d+)+$|^\d+$/.test(code) ? 1 : 0);
+  const group = (code: string | null) => (!code ? 2 : /^(P\d+|\d+|[A-Z])(\.\d+)*$/.test(code) ? 1 : 0);
   const ga = group(a);
   const gb = group(b);
   if (ga !== gb) return ga - gb;
   if (ga !== 1) return (a ?? '').localeCompare(b ?? '');
 
-  const pa = a!.split('.');
-  const pb = b!.split('.');
+  const pa = splitCode(a!);
+  const pb = splitCode(b!);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     if (pa[i] === undefined) return -1;
     if (pb[i] === undefined) return 1;
@@ -223,11 +235,23 @@ export function curriculumForTopic(
 }
 
 /**
+ * The coursebook's two practical-skills chapters are lettered P1 and P2, not
+ * numbered, but `chapters.chapter_number` is an integer — so they are stored
+ * after chapter 31 and carry their coursebook label here.
+ */
+export const AS_PRACTICAL_CHAPTER = 32;
+export const A_LEVEL_PRACTICAL_CHAPTER = 33;
+const PRACTICAL_CHAPTERS: Record<number, string> = {
+  [AS_PRACTICAL_CHAPTER]: 'P1',
+  [A_LEVEL_PRACTICAL_CHAPTER]: 'P2',
+};
+
+/**
  * How a chapter is named in its course: IGCSE coursebook "Chapter 3", 9702
- * syllabus "Unit 12", IB "Theme B" (IB chapters are numbered 1–5 for A–E).
+ * coursebook "Chapter 12", IB "Theme B" (IB chapters are numbered 1–5 for A–E).
  */
 export function chapterLabel(courseCode: string | null | undefined, chapterNumber: number): string {
-  if (courseCode === '9702') return `Unit ${chapterNumber}`;
+  if (courseCode === '9702') return PRACTICAL_CHAPTERS[chapterNumber] ?? `Chapter ${chapterNumber}`;
   if (courseCode === 'IB') return `Theme ${'ABCDE'[chapterNumber - 1] ?? chapterNumber}`;
   return `Chapter ${chapterNumber}`;
 }
@@ -237,11 +261,15 @@ export const IGCSE_COURSE_CODE = '0625';
 
 /**
  * The curriculum a chapter page opens in when the URL doesn't say, taken from
- * which course the chapter belongs to: a 9702 unit up to 11 is AS content,
- * 12 onwards is A Level only.
+ * which course the chapter belongs to: a 9702 chapter up to 15 is AS content,
+ * 16 onwards is A Level only.
  */
 export function defaultCurriculumForCourse(courseCode: string | null | undefined, chapterNumber: number): CurriculumId {
-  if (courseCode === '9702') return chapterNumber <= 11 ? 'as' : 'a-level';
+  if (courseCode === '9702') {
+    if (chapterNumber === AS_PRACTICAL_CHAPTER) return 'as';
+    if (chapterNumber === A_LEVEL_PRACTICAL_CHAPTER) return 'a-level';
+    return chapterNumber <= 15 ? 'as' : 'a-level';
+  }
   if (courseCode === 'IB') return 'ib';
   return 'igcse';
 }

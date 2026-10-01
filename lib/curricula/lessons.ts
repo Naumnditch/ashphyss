@@ -89,7 +89,10 @@ function unitLabel(curriculumId: CurriculumId, unitCode: string): string {
   if (unitCode === 'Maths' || unitCode === 'Tools') return 'Skills';
   if (curriculumId === 'ib') return `Theme ${unitCode}`;
   if (curriculumId === 'igcse') return `Topic ${unitCode}`;
-  return `Unit ${unitCode}`;
+  // AS and A Level follow the coursebook, whose practical-skills chapters are
+  // numbered P1 and P2 rather than with an ordinary chapter number.
+  if (/^P\d+$/.test(unitCode)) return unitCode;
+  return `Chapter ${unitCode}`;
 }
 
 /**
