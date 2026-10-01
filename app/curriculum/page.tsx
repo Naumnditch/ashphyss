@@ -20,8 +20,8 @@ async function loadGroups(curriculumId: CurriculumId): Promise<{ groups: LessonG
 
 const INTROS: Record<CurriculumId, string> = {
   igcse: 'Every chapter of the Cambridge IGCSE Physics coursebook, tagged with its 0625 syllabus section.',
-  as: 'The Cambridge International AS Level (9702, units 1–11), in syllabus order. Lessons that share an IGCSE simulation are listed under the AS topic they support.',
-  'a-level': 'The full Cambridge International A Level (9702): all of AS plus units 12–25, in syllabus order.',
+  as: 'The Cambridge International AS Level (9702), following the coursebook: chapters 1–15 plus the P1 practical skills. Lessons that share an IGCSE simulation are listed under the chapter they support.',
+  'a-level': 'The full Cambridge International A Level (9702), following the coursebook: all of AS plus chapters 16–31 and the P2 practical skills.',
   ib: 'IB Diploma Physics (SL & HL, first assessment 2025), by theme and subtopic. HL-only subtopics are marked (HL).',
 };
 

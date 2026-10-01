@@ -53,13 +53,13 @@ const CURRICULA = [
   },
   {
     name: 'AS Level Physics',
-    detail: 'Cambridge 9702 — units 1–11',
+    detail: 'Cambridge 9702 — coursebook chapters 1–15',
     status: 'available',
     href: '/curriculum?c=as',
   },
   {
     name: 'A Level Physics',
-    detail: 'Cambridge 9702 — AS plus units 12–25',
+    detail: 'Cambridge 9702 — AS plus coursebook chapters 16–31',
     status: 'available',
     href: '/curriculum?c=a-level',
   },

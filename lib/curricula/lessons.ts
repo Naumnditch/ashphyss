@@ -99,8 +99,9 @@ function unitLabel(curriculumId: CurriculumId, unitCode: string): string {
  * Groups lessons the way the curriculum itself is organised.
  *
  * IGCSE follows the coursebook the lessons were written from, so it groups by
- * chapter, as the site always has. AS, A Level and IB group by syllabus unit,
- * in syllabus order, because their lessons come from more than one course: a
+ * chapter, as the site always has. AS, A Level and IB group by syllabus unit —
+ * for 9702 those units are the coursebook's own chapters — because their
+ * lessons come from more than one course: a
  * shared IGCSE lesson with a simulation sits in the same unit as the 9702
  * lessons around it. Lessons whose code matches no unit land in a final
  * "Other lessons" group rather than disappearing.
