@@ -145,10 +145,11 @@ export function AdminSidebar({ name, pending }: { name: string; pending: Pending
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-controls="admin-drawer"
-          className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          aria-label="Browse admin sections"
+          className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]"
         >
           <AdminIcon name={open ? 'close' : 'menu'} />
-          Menu
+          Browse
         </button>
       </div>
       {open && (

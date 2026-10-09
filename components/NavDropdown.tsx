@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useDropdownEdgeAlign } from './useDropdownEdgeAlign';
 
 export interface NavItem {
   href: string;
@@ -17,6 +18,8 @@ export interface NavItem {
 export function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const align = useDropdownEdgeAlign(open, panelRef, 'right');
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -52,7 +55,10 @@ export function NavDropdown({ label, items }: { label: string; items: NavItem[] 
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1.5 z-50">
+        <div
+          ref={panelRef}
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-56 max-w-[calc(100vw-1rem)] bg-white border border-gray-200 rounded-lg shadow-lg py-1.5 z-50`}
+        >
           {items.map((it) => (
             <Link
               key={it.href}

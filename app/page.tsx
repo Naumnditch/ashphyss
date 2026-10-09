@@ -7,7 +7,8 @@ import { FloatingFormulas } from '@/components/home/FloatingFormulas';
 import { HeroVideo } from '@/components/home/HeroVideo';
 import { AnnouncementsFeed } from '@/components/announcements/AnnouncementsFeed';
 import { AnnouncementTicker } from '@/components/announcements/AnnouncementTicker';
-import { SAMPLE_ANNOUNCEMENTS } from '@/lib/announcements/sampleAnnouncements';
+import { getVisibleUpdates } from '@/lib/announcements/format';
+import { UPDATES } from '@/lib/announcements/updates';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,8 +103,34 @@ const SIM_SHOWCASE = [
   { title: 'Spring Lab', tagline: "Hooke's law, pushed past its limit", href: '/simulations/spring' },
 ];
 
+function HeroCtas() {
+  return (
+    <div className="animate-fade-in-up" style={{ animationDelay: '240ms' }}>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+        <Link
+          href="/auth/signup"
+          className="inline-flex items-center justify-center bg-gray-900 hover:bg-black text-white px-7 py-3.5 rounded-lg font-semibold text-[15px] transition-transform hover:scale-[1.03] w-full sm:w-auto"
+        >
+          Start Learning Free
+        </Link>
+        <Link
+          href="/curriculum"
+          className="inline-flex items-center justify-center border border-gray-300 hover:bg-gray-50 text-gray-800 px-7 py-3.5 rounded-lg font-semibold text-[15px] transition-colors w-full sm:w-auto"
+        >
+          Explore the Curriculum
+        </Link>
+      </div>
+      <p className="text-xs text-gray-400">
+        Built by a physics teacher, for physics students. Free forever for the core curriculum — no credit card needed.
+      </p>
+    </div>
+  );
+}
+
 export default async function HomePage() {
   const [stats, plans] = await Promise.all([getStats(), getPlans()]);
+  const now = Date.now();
+  const updates = getVisibleUpdates(UPDATES, now);
 
   return (
     <div>
@@ -121,59 +148,64 @@ export default async function HomePage() {
         <PhysicsBackground />
         <FloatingFormulas />
 
-        <div className="relative text-center max-w-3xl mx-auto px-4 pt-16 pb-14">
-          <div className="flex justify-center mb-4 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-            <AnnouncementTicker announcements={SAMPLE_ANNOUNCEMENTS} now={Date.now()} />
+        <div className="relative max-w-6xl mx-auto px-4 pt-6 sm:pt-8 pb-14 sm:pb-16">
+          {/* Top strip: updates pill top-right, small CTA beside it so something
+              actionable is visible before any scroll, on every screen with room
+              for it. (On phones the one full CTA lower down is enough — see
+              HeroCtas' lg:hidden placement below.) */}
+          <div className="flex justify-end mb-8 sm:mb-10 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <AnnouncementTicker announcements={updates} count={5} now={now} />
+              <Link
+                href="/auth/signup"
+                className="hidden sm:inline-flex shrink-0 items-center bg-gray-900 hover:bg-black text-white px-3.5 py-1.5 rounded-full font-semibold text-xs transition-transform hover:scale-[1.03] whitespace-nowrap"
+              >
+                Start Free
+              </Link>
+            </div>
           </div>
-          <div
-            className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5 text-xs font-semibold text-gray-600 mb-6 animate-fade-in-up"
-            style={{ animationDelay: '0ms' }}
-          >
-            IGCSE · AS & A Level · IB — all under one roof
+
+          {/* 12-col grid, ~5/7 split. `order` keeps the mobile reading order
+              (headline -> video -> CTA) while desktop groups the CTA under
+              the headline, beside the video. */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 lg:items-center">
+            <div className="order-1 lg:col-span-5">
+              <div
+                className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5 text-xs font-semibold text-gray-600 mb-6 animate-fade-in-up"
+                style={{ animationDelay: '0ms' }}
+              >
+                IGCSE · AS & A Level · IB — all under one roof
+              </div>
+
+              <h1
+                className="text-4xl sm:text-5xl lg:text-[2.75rem] xl:text-5xl font-bold tracking-tight text-gray-900 mb-5 animate-fade-in-up"
+                style={{ animationDelay: '80ms' }}
+              >
+                One Website. Every Physics Lesson You&rsquo;ll Ever Need.
+              </h1>
+
+              <p
+                className="text-lg text-gray-600 leading-relaxed mb-8 animate-fade-in-up"
+                style={{ animationDelay: '160ms' }}
+              >
+                Full curriculum coverage, real interactive simulations, and practice that adapts to exactly where you&rsquo;re stuck.
+              </p>
+
+              {/* Desktop only: grouped under the headline, in the left column. */}
+              <div className="hidden lg:block">
+                <HeroCtas />
+              </div>
+            </div>
+
+            <div id="film" className="order-2 lg:col-span-7 scroll-mt-24 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+              <HeroVideo />
+            </div>
+
+            {/* Mobile & tablet only: after the video, per the required reading order. */}
+            <div className="order-3 lg:hidden">
+              <HeroCtas />
+            </div>
           </div>
-
-          <h1
-            className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 mb-5 animate-fade-in-up"
-            style={{ animationDelay: '80ms' }}
-          >
-            One Website. Every Physics<br className="hidden sm:block" /> Lesson You&rsquo;ll Ever Need.
-          </h1>
-
-          <p
-            className="text-lg text-gray-600 leading-relaxed max-w-xl mx-auto mb-8 animate-fade-in-up"
-            style={{ animationDelay: '160ms' }}
-          >
-            Full curriculum coverage, real interactive simulations, and practice that adapts to
-            exactly where you&rsquo;re stuck. Built by a physics teacher, for physics students.
-          </p>
-
-          <div
-            className="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in-up"
-            style={{ animationDelay: '240ms' }}
-          >
-            <Link
-              href="/auth/signup"
-              className="bg-gray-900 hover:bg-black text-white px-7 py-3.5 rounded-lg font-semibold text-[15px] transition-transform hover:scale-[1.03] w-full sm:w-auto"
-            >
-              Start Learning Free
-            </Link>
-            <Link
-              href="/curriculum"
-              className="border border-gray-300 hover:bg-gray-50 text-gray-800 px-7 py-3.5 rounded-lg font-semibold text-[15px] transition-colors w-full sm:w-auto"
-            >
-              Explore the Curriculum
-            </Link>
-          </div>
-          <p
-            className="text-xs text-gray-400 mt-4 animate-fade-in-up"
-            style={{ animationDelay: '300ms' }}
-          >
-            Free forever for the core curriculum. No credit card needed.
-          </p>
-        </div>
-
-        <div id="film" className="relative max-w-5xl mx-auto px-4 pb-16 animate-fade-in-up scroll-mt-24" style={{ animationDelay: '360ms' }}>
-          <HeroVideo />
         </div>
       </section>
 
@@ -294,7 +326,7 @@ export default async function HomePage() {
             <h2 id="whats-new" className="text-2xl font-bold text-gray-900 mb-2">What&rsquo;s New</h2>
             <p className="text-gray-500 max-w-lg mx-auto">New lessons, simulations, practice and videos, as they land.</p>
           </Reveal>
-          <AnnouncementsFeed announcements={SAMPLE_ANNOUNCEMENTS} initialCount={5} step={3} viewAllHref="/updates" now={Date.now()} />
+          <AnnouncementsFeed announcements={updates} initialCount={5} step={3} viewAllHref="/updates" now={now} />
         </div>
       </section>
 

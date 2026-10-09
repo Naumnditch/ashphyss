@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
+Last updated: 2026-10-09 (Landing page refresh: the hero "Updates" pill now reads from a real, typed data source instead of hardcoded sample content; the hero was restructured into a top strip + responsive 2-column grid with the video above the fold; the mobile nav menu — previously a dropdown that clipped off the left edge of the viewport on phones — is now a full-width sheet; and a header/overflow audit fixed real horizontal-scroll bugs at several widths. See "Landing page refresh: real updates pill, hero layout, mobile menu" below). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
 
 ---
 
@@ -19,6 +19,166 @@ Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier
   `git push origin main && git push ashphyss main:master --force`
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
+
+### Landing page refresh: real updates pill, hero layout, mobile menu (NEW 2026-10-09)
+- **Updates pill was showing stale, hardcoded content.** The pill (badge +
+  title + date + arrow + dots, top of the homepage hero) read from
+  `lib/announcements/sampleAnnouncements.ts`, a hand-written array that
+  hadn't been touched since 2026-09-25 — by today it was advertising a
+  "Circular Motion Lab in 3D" simulation that doesn't exist as a real
+  shipped page. Replaced with a single source of truth,
+  `lib/announcements/updates.ts` (`UPDATES: Announcement[]`), typed in
+  `lib/announcements/types.ts`: `id`, `title`, `description`, `date`,
+  `href`, `category` (lesson/video/simulation/quiz/platform — drives the
+  icon/colour and the `/updates` filter chips, pre-existing and still
+  load-bearing there) and two NEW fields, `type` (`'new' | 'improved' |
+  'fix'` — what the task asked for by this name; kept separate from
+  `category` rather than overloading one field, since the filter chips
+  already mean "type" as content-category sitewide) and `published:
+  boolean`. `getVisibleUpdates()` (`lib/announcements/format.ts`) is the
+  one gate every surface filters through: hides anything `published:
+  false` or dated after "now", sorts newest-first. The pill, the homepage
+  "What's New" feed and `/updates` all call it on the same `UPDATES`
+  array — nothing is pill-specific.
+  - Pill now caps at the latest 5 (`AnnouncementTicker`'s `count` prop,
+    was 3); dots reflect the real item count/active index; pauses on
+    hover/focus/keyboard focus and respects `prefers-reduced-motion`
+    (both were already correctly implemented, just untested — the bug was
+    purely the data); the small "New" badge is now dynamic per the active
+    item's `type` (New/Improved/Fix, colour-coded) instead of hardcoded
+    text; renders nothing when the filtered list is empty.
+  - **Seeded 8 real entries** from `git log` + this file + the routes that
+    actually exist (checked each `app/` path before linking to it — no
+    guessed lesson/topic UUIDs): the AS Kinematics banks, the site-wide
+    "Need help?" CTA, the receipt-upload-page crash fix (a genuine `fix`
+    entry), the circular-motion/gravitation challenge set, the Equation
+    Rearranger cross-multiplication shortcut, the A Level circular-motion
+    practice bank, the AS/A Level/IB curriculum launch, and embedded
+    interactive solutions — each with its real ship date and a link to a
+    real top-level route (`/curriculum?c=as`, `/simulations/equation-
+    rearranger`, `/video-requests`, `/subscribe/verify`, etc).
+  - **How to add a new update** (so this doesn't go stale again): add one
+    object to the `UPDATES` array in `lib/announcements/updates.ts` with
+    the real date it ships and a link to the real page. Leave `published:
+    false` if it's not live yet — flip it to `true` the day it ships.
+    `getVisibleUpdates()` handles hiding/showing and ordering everywhere
+    automatically; nothing else needs editing, and nothing needs deleting
+    later. Tests: `lib/announcements/__tests__/format.test.ts` now also
+    covers `isVisibleNow`/`getVisibleUpdates` (unpublished hidden,
+    future-dated hidden, sorted newest-first) and asserts every shipped
+    `UPDATES` entry is itself published and not future-dated.
+- **Hero restructured** (`app/page.tsx`): a top strip holds the pill at
+  top-right with a compact "Start Free" CTA beside it (visible `sm:` and
+  up, so something actionable sits above the fold on every screen with
+  room for it; omitted below `sm` to avoid a second, redundant Sign Up
+  button crammed next to the hamburger on the smallest phones — the one
+  full CTA block right after the video is enough there). Below that, a
+  12-column grid (~5/7 split) holds the headline/value-prop/CTA/trust-line
+  on the left and `HeroVideo` on the right, `items-center` on `lg:`+.
+  `HeroVideo` itself (`components/home/HeroVideo.tsx`) already met the
+  brief — muted/looped/`playsInline`, fixed `aspect-video` (no layout
+  shift), poster image, `preload="metadata"`, plays only when scrolled
+  into view — so it was left alone, just moved into the new layout.
+  Mobile/tablet (below `lg`, 1024px — chose to stack rather than attempt
+  a cramped 2-column at tablet widths) reads pill → headline → video →
+  CTA via a small, deliberately duplicated `HeroCtas()` block (`hidden
+  lg:block` under the headline vs. `lg:hidden` after the video) rather
+  than CSS grid row-spanning, which turned out far more fragile for
+  getting "CTA after video on mobile, CTA under headline on desktop" right
+  without guessing at row-height math.
+- **Mobile menu was clipping off the left edge of the viewport and
+  overlapping the header**, and the Teacher Applications/admin page showed
+  two different controls both labelled "Menu". Root cause of the first:
+  the hamburger reused `NavDropdown`, a dropdown that's `absolute
+  right-0`-anchored to its own trigger button — fine for a desktop
+  dropdown, wrong for an exhaustive mobile nav list, and on a crowded
+  header the anchor point itself could land anywhere. Fixed by giving
+  mobile its own component, `components/MobileMenu.tsx`: a hamburger that
+  opens a `fixed inset-0` full-viewport sheet (backdrop + full-width
+  panel), not anchored to the button at all, so it structurally cannot be
+  clipped regardless of where the button sits. Closes on route change,
+  Escape and backdrop click; locks body scroll while open; simple Tab
+  focus trap inside the panel; returns focus to the trigger on close;
+  `aria-expanded`/`aria-controls`/`aria-modal`; every tap target ≥44px.
+  Second bug: `components/admin/AdminSidebar.tsx`'s own phone-bar toggle
+  was also labelled "Menu" — it's a real, different control (expands the
+  admin section nav: Dashboard/People/Content/Requests/Billing — not the
+  site nav), so relabelled to "Browse" (`aria-label="Browse admin
+  sections"`) rather than removed. Didn't reuse the `sections` admin icon
+  for it, since that's already the icon for the actual "/admin/sections"
+  nav item one line below it in the same list — would have been a second,
+  new collision.
+  - **Desktop dropdowns made viewport-aware** in the shared primitive
+    rather than per page: `components/useDropdownEdgeAlign.ts` is a small
+    hook (`useLayoutEffect` measures the rendered panel before paint, no
+    flicker) that flips a panel's anchor edge if it would overflow either
+    side of the viewport, `max-w-[calc(100vw-1rem)]` as a last-resort
+    clamp. Wired into `NavDropdown.tsx`, `CurriculumDropdown.tsx` and
+    `SearchBar.tsx`'s results panel — the three nav-area popovers. (Other,
+    unrelated `absolute`-positioned menus elsewhere, e.g.
+    `components/admin/UserRoleActions.tsx`'s row action menu, were left
+    as they were — out of scope for "the project's existing popover/
+    dropdown primitive" used by the header this bug was reported on.)
+  - **Search collapses to an icon below `lg`** (`components/SearchBar.tsx`)
+    instead of a permanent text input, and expands in place (with a close
+    button) on tap — there wasn't room for a 224px input next to the
+    hamburger, messages icon and Admin button on a phone.
+- **Real overflow found and fixed**, not just the menu: a Playwright sweep
+  (`document.documentElement.scrollWidth` vs `clientWidth` at 320, 360,
+  390, 768, 1024, 1280, 1536px, across the homepage, `/updates`,
+  `/pricing`, `/curriculum`, `/about`, `/contact`, and a throwaway local
+  mirror of the admin shell for the DB-less sandbox — see below) found
+  **zero overflow at 360/390/1280/1536, but 7px/68px/141px of real
+  horizontal overflow at 320/768/1024 respectively**, on every page using
+  the shared `Navbar`. Root cause: `Navbar.tsx`'s breakpoints put too much
+  on at once at the standard `sm`(640)/`lg`(1024) steps — the search input
+  jumping from an icon to a 224px field and "Sign In" appearing both at
+  `sm`, and the full desktop link cluster (Curriculum/Study
+  Materials/Courses/More) all appearing at `lg` right as the hamburger
+  disappeared, together exceeded the available header width. Restaggered:
+  logo now steps `108px → 130px(xs,400px) → 160px(sm) → 210px(md) →
+  270px(xl)`; the desktop-only link cluster and "Sign In" moved to
+  `xl`(1280)/`lg`(1024) respectively; the hamburger (`MobileMenu`) and
+  search's icon form now persist through `xl` instead of `lg`. Re-swept
+  after the fix: 0px overflow at all 7 widths, on every page tested,
+  including with the mobile sheet open and with desktop dropdowns open.
+  Verified with the globally-installed `playwright` npm package (this
+  repo has no Playwright devDependency; used
+  `/opt/node22/lib/node_modules/playwright` directly, chromium at
+  `/opt/pw-browsers/chromium` per this sandbox's setup) — screenshots at
+  all 7 widths, menu-open states, and the admin shell aren't committed
+  (ephemeral verification only).
+  - To screenshot the admin shell without a live DB/session in this
+    sandbox (no `DATABASE_URL`, so `getCurrentUser()` always resolves to
+    `null` and `/admin/*` just redirects to `/auth/login`), used a
+    temporary route rendering the real `AdminSidebar` component with fake
+    props outside of auth — **deleted before committing**, not shipped.
+    Gotcha hit while building it, worth knowing for next time: a Next.js
+    App Router folder prefixed with `_` (e.g. `app/_dev-preview/`) is a
+    "private folder" and is excluded from routing entirely (404s) — use a
+    plain folder name for any throwaway local-only route.
+- **Judgement calls made without asking**: kept the richer `category`
+  taxonomy (content type, for icons/filter chips) alongside the new
+  `type` (new/improved/fix) field rather than replacing one with the
+  other; pushed the desktop nav cluster to `xl` instead of trying to
+  squeeze it into `lg` (would have needed shrinking several dropdown
+  labels and still been fragile); relabelled rather than removed the
+  admin phone-bar toggle since it does serve a real, distinct purpose.
+- **Not done / out of scope**: did not re-point this sandbox's dev server
+  at the real Supabase project to screenshot the actual authenticated
+  `/admin/teacher-applications` page with live data — the throwaway
+  component mirror above is structurally identical (same `Navbar` +
+  `AdminSidebar`, same breakpoints) and was judged sufficient without
+  touching production data for a UI-only check. Did not audit every page
+  in the app pixel-by-pixel; swept the pages above plus the shared
+  `Navbar`/`Footer`/dropdown primitives that every page inherits, which is
+  where the real bugs were. **Pushed to this session's required branch
+  (`claude/relaxed-pasteur-623hnp`) on both `ashphys` and `ashphyss`, not
+  to `main`/`master`** — the "Two GitHub repos" deploy step below
+  (`git push origin main && git push ashphyss main:master --force`) is a
+  separate, deliberate production-promotion step for whoever reviews this
+  branch to take next, not something this session's harness permits it to
+  do unprompted.
 
 ### AS Level Kinematics & Accelerated motion practice banks (NEW 2026-10-09)
 - A fresh, tier-ordered 20-question (Q1-Q20) AS-curriculum bank for every

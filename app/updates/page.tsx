@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { AnnouncementsFeed } from '@/components/announcements/AnnouncementsFeed';
-import { SAMPLE_ANNOUNCEMENTS } from '@/lib/announcements/sampleAnnouncements';
+import { getVisibleUpdates } from '@/lib/announcements/format';
+import { UPDATES } from '@/lib/announcements/updates';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default function UpdatesPage() {
+  const now = Date.now();
+  const updates = getVisibleUpdates(UPDATES, now);
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">What&rsquo;s New</h1>
       <p className="text-gray-500 mb-8">Every new lesson, simulation, video, practice set and platform update, newest first.</p>
-      <AnnouncementsFeed announcements={SAMPLE_ANNOUNCEMENTS} initialCount={12} step={12} now={Date.now()} />
+      <AnnouncementsFeed announcements={updates} initialCount={12} step={12} now={now} />
     </div>
   );
 }

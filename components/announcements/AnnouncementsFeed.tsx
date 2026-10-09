@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { formatAnnouncementDate, formatFullDate, sortNewestFirst } from '@/lib/announcements/format';
-import { ANNOUNCEMENT_TYPES, type Announcement, type AnnouncementType } from '@/lib/announcements/types';
+import { ANNOUNCEMENT_CATEGORIES, UPDATE_KIND_LABEL, type Announcement, type AnnouncementCategory } from '@/lib/announcements/types';
 
-/** Colour, badge and icon for each kind of announcement. */
-const STYLE: Record<AnnouncementType, { dot: string; badge: string; ring: string; icon: React.ReactNode }> = {
+/** Colour, badge and icon for each category of announcement. */
+const STYLE: Record<AnnouncementCategory, { dot: string; badge: string; ring: string; icon: React.ReactNode }> = {
   lesson: {
     dot: 'bg-blue-600 text-white',
     badge: 'bg-blue-50 text-blue-700 ring-blue-200',
@@ -46,7 +46,13 @@ const STYLE: Record<AnnouncementType, { dot: string; badge: string; ring: string
   },
 };
 
-const LABEL = Object.fromEntries(ANNOUNCEMENT_TYPES.map((t) => [t.type, t.label])) as Record<AnnouncementType, string>;
+const LABEL = Object.fromEntries(ANNOUNCEMENT_CATEGORIES.map((t) => [t.type, t.label])) as Record<AnnouncementCategory, string>;
+
+const KIND_BADGE_CLASS: Record<Announcement['type'], string> = {
+  new: 'bg-gray-900 text-white',
+  improved: 'bg-gray-100 text-gray-700',
+  fix: 'bg-amber-100 text-amber-800',
+};
 
 export interface AnnouncementsFeedProps {
   announcements: Announcement[];
@@ -68,21 +74,21 @@ export interface AnnouncementsFeedProps {
  * with "Show more" and an optional "View all" link.
  */
 export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, showFilters = true, viewAllHref, now }: AnnouncementsFeedProps) {
-  const [filter, setFilter] = useState<AnnouncementType | 'all'>('all');
+  const [filter, setFilter] = useState<AnnouncementCategory | 'all'>('all');
   const [visible, setVisible] = useState(initialCount);
   const [clock] = useState(() => now ?? Date.now());
 
   const sorted = useMemo(() => sortNewestFirst(announcements), [announcements]);
   const counts = useMemo(() => {
-    const c: Partial<Record<AnnouncementType, number>> = {};
-    sorted.forEach((a) => (c[a.type] = (c[a.type] ?? 0) + 1));
+    const c: Partial<Record<AnnouncementCategory, number>> = {};
+    sorted.forEach((a) => (c[a.category] = (c[a.category] ?? 0) + 1));
     return c;
   }, [sorted]);
-  const filtered = filter === 'all' ? sorted : sorted.filter((a) => a.type === filter);
+  const filtered = filter === 'all' ? sorted : sorted.filter((a) => a.category === filter);
   const shown = filtered.slice(0, visible);
   const hidden = filtered.length - shown.length;
 
-  const choose = (f: AnnouncementType | 'all') => {
+  const choose = (f: AnnouncementCategory | 'all') => {
     setFilter(f);
     setVisible(initialCount);
   };
@@ -90,9 +96,9 @@ export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, s
   return (
     <div>
       {showFilters && (
-        <div className="flex gap-2 mb-6 overflow-x-auto sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter updates by type">
+        <div className="flex gap-2 mb-6 overflow-x-auto sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 [scrollbar-width:none]" role="group" aria-label="Filter updates by category">
           <FilterChip active={filter === 'all'} onClick={() => choose('all')} label="All" count={sorted.length} />
-          {ANNOUNCEMENT_TYPES.filter((t) => counts[t.type]).map((t) => (
+          {ANNOUNCEMENT_CATEGORIES.filter((t) => counts[t.type]).map((t) => (
             <FilterChip key={t.type} active={filter === t.type} onClick={() => choose(t.type)} label={t.plural} count={counts[t.type]!} type={t.type} />
           ))}
         </div>
@@ -105,7 +111,7 @@ export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, s
           {/* The timeline's spine */}
           <span className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-200" aria-hidden="true" />
           {shown.map((a, i) => {
-            const s = STYLE[a.type];
+            const s = STYLE[a.category];
             return (
               <li
                 key={a.id}
@@ -113,7 +119,7 @@ export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, s
                 style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
               >
                 <span className={`absolute left-0 top-3 w-8 h-8 rounded-full flex items-center justify-center ring-4 ring-white shadow-sm ${s.dot}`} aria-hidden="true">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill={a.type === 'video' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={a.type === 'video' ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill={a.category === 'video' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={a.category === 'video' ? 0 : 1.8} strokeLinecap="round" strokeLinejoin="round">
                     {s.icon}
                   </svg>
                 </span>
@@ -122,16 +128,10 @@ export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, s
                   className={`group block rounded-xl border border-gray-200 bg-white px-4 py-3.5 sm:px-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${s.ring}`}
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
-                    <span className={`inline-flex items-center text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ring-1 ${s.badge}`}>{LABEL[a.type]}</span>
-                    {a.status && (
-                      <span
-                        className={`text-[10.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                          a.status === 'new' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {a.status === 'new' ? 'New' : 'Updated'}
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ring-1 ${s.badge}`}>{LABEL[a.category]}</span>
+                    <span className={`text-[10.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${KIND_BADGE_CLASS[a.type]}`}>
+                      {UPDATE_KIND_LABEL[a.type]}
+                    </span>
                     <time dateTime={a.date} title={formatFullDate(a.date)} className="ml-auto text-xs text-gray-500 tabular-nums">
                       {formatAnnouncementDate(a.date, clock)}
                     </time>
@@ -166,7 +166,7 @@ export function AnnouncementsFeed({ announcements, initialCount = 6, step = 4, s
   );
 }
 
-function FilterChip({ active, onClick, label, count, type }: { active: boolean; onClick: () => void; label: string; count: number; type?: AnnouncementType }) {
+function FilterChip({ active, onClick, label, count, type }: { active: boolean; onClick: () => void; label: string; count: number; type?: AnnouncementCategory }) {
   return (
     <button
       onClick={onClick}

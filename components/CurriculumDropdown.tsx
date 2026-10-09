@@ -3,10 +3,13 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { CURRICULUM_LIST } from '@/lib/curricula';
+import { useDropdownEdgeAlign } from './useDropdownEdgeAlign';
 
 export function CurriculumDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const align = useDropdownEdgeAlign(open, panelRef, 'left');
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -36,7 +39,10 @@ export function CurriculumDropdown() {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div
+          ref={panelRef}
+          className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-2 w-72 max-w-[calc(100vw-1rem)] bg-white border border-gray-200 rounded-lg shadow-lg z-50`}
+        >
           <Link
             href="/curriculum"
             onClick={() => setOpen(false)}

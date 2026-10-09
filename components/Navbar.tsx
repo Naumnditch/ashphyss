@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CurriculumDropdown } from './CurriculumDropdown';
 import { NavDropdown } from './NavDropdown';
+import { MobileMenu, type MobileMenuItem } from './MobileMenu';
 import { SearchBar } from './SearchBar';
 import { getCurrentUser } from '@/lib/auth/session';
 import { MessagesNavLink } from './messages/MessagesNavLink';
@@ -15,10 +16,23 @@ function dashboardHref(user: NonNullable<Awaited<ReturnType<typeof getCurrentUse
 export async function Navbar() {
   const user = await getCurrentUser();
 
+  // Below lg, the links hidden above all live in the MobileMenu sheet instead.
+  const mobileItems: MobileMenuItem[] = [
+    { href: '/curriculum', label: 'Curriculum' },
+    { href: '/courses', label: 'Courses' },
+    { href: '/pricing', label: 'Pricing' },
+    { href: '/past-papers', label: 'Past Papers' },
+    { href: '/booklets', label: 'Booklets' },
+    { href: '/resources', label: 'Resources' },
+    { href: '/about', label: 'About Us' },
+    { href: '/contact', label: 'Contact' },
+    ...(!user ? [{ href: '/auth/login', label: 'Sign In' }] : []),
+  ];
+
   return (
     <header className="border-b border-gray-200">
-      <div className="container-max py-4 flex items-center justify-between">
-        <div className="flex items-center mr-4">
+      <div className="container-max py-3 sm:py-4 flex items-center justify-between gap-2">
+        <div className="flex items-center min-w-0 mr-1 sm:mr-4 shrink-0">
           <Link href="/" className="inline-flex items-center">
             <Image
               src="/assets/logo.png"
@@ -26,14 +40,22 @@ export async function Navbar() {
               width={730}
               height={185}
               priority
-              className="w-[210px] sm:w-[270px] h-auto"
+              className="w-[108px] xs:w-[130px] sm:w-[160px] md:w-[210px] xl:w-[270px] h-auto"
             />
           </Link>
         </div>
-        <nav className="flex items-center gap-2 sm:gap-5">
-          <div className="hidden lg:block"><CurriculumDropdown /></div>
+        {/*
+          Breakpoints here are deliberately staggered, not the usual
+          sm/md/lg triplet: cramming the full desktop cluster (curriculum +
+          study materials + courses + more) in alongside the full search
+          input and both auth links right at `lg` (1024px) overflowed the
+          header. Desktop-only items now wait for `xl` (1280px); the
+          hamburger (MobileMenu) covers everything below that instead.
+        */}
+        <nav className="flex items-center gap-1.5 sm:gap-5 min-w-0">
+          <div className="hidden xl:block"><CurriculumDropdown /></div>
 
-          <div className="hidden lg:block">
+          <div className="hidden xl:block">
             <NavDropdown
               label="Study Materials"
               items={[
@@ -44,10 +66,10 @@ export async function Navbar() {
             />
           </div>
 
-          <Link className="text-sm hover:underline hidden lg:inline-block whitespace-nowrap" href="/courses">Courses</Link>
+          <Link className="text-sm hover:underline hidden xl:inline-block whitespace-nowrap" href="/courses">Courses</Link>
           <Link className="text-sm hover:underline hidden md:inline-block font-semibold text-blue-600 whitespace-nowrap" href="/pricing">Pricing</Link>
 
-          <div className="hidden lg:block">
+          <div className="hidden xl:block">
             <NavDropdown
               label="More"
               items={[
@@ -58,35 +80,21 @@ export async function Navbar() {
             />
           </div>
 
-          {/* below lg the links above are hidden, so everything lives here */}
-          <div className="lg:hidden">
-            <NavDropdown
-              label="Menu"
-              items={[
-                { href: '/curriculum', label: 'Curriculum' },
-                { href: '/courses', label: 'Courses' },
-                { href: '/pricing', label: 'Pricing' },
-                { href: '/past-papers', label: 'Past Papers' },
-                { href: '/booklets', label: 'Booklets' },
-                { href: '/resources', label: 'Resources' },
-                { href: '/about', label: 'About Us' },
-                { href: '/contact', label: 'Contact' },
-              ]}
-            />
-          </div>
+          {/* Below xl: one hamburger opens every link above as a full-width sheet. */}
+          <MobileMenu items={mobileItems} />
 
           <SearchBar />
           {user ? (
             <>
               <MessagesNavLink href={user.role === 'admin' ? '/admin/messages' : '/dashboard/messages'} />
-              <Link className="btn btn-primary text-sm whitespace-nowrap" href={dashboardHref(user)}>
+              <Link className="btn btn-primary text-xs sm:text-sm px-2.5 sm:px-4 whitespace-nowrap" href={dashboardHref(user)}>
                 {user.role === 'admin' ? 'Admin' : 'Dashboard'}
               </Link>
             </>
           ) : (
             <>
-              <Link className="text-sm hover:underline text-blue-600 font-medium whitespace-nowrap" href="/auth/login">Sign In</Link>
-              <Link className="btn btn-primary text-sm whitespace-nowrap" href="/auth/signup">Sign Up</Link>
+              <Link className="text-sm hover:underline text-blue-600 font-medium whitespace-nowrap hidden lg:inline-block" href="/auth/login">Sign In</Link>
+              <Link className="btn btn-primary text-xs sm:text-sm px-2.5 sm:px-4 whitespace-nowrap" href="/auth/signup">Sign Up</Link>
             </>
           )}
         </nav>
