@@ -149,20 +149,25 @@ export default async function HomePage() {
         <FloatingFormulas />
 
         <div className="relative max-w-6xl mx-auto px-4 pt-6 sm:pt-8 pb-14 sm:pb-16">
-          {/* Top strip: updates pill top-right, small CTA beside it so something
-              actionable is visible before any scroll, on every screen with room
-              for it. (On phones the one full CTA lower down is enough — see
-              HeroCtas' lg:hidden placement below.) */}
-          <div className="flex justify-end mb-8 sm:mb-10 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-            <div className="flex items-center gap-2 min-w-0">
-              <AnnouncementTicker announcements={updates} count={5} now={now} />
-              <Link
-                href="/auth/signup"
-                className="hidden sm:inline-flex shrink-0 items-center bg-gray-900 hover:bg-black text-white px-3.5 py-1.5 rounded-full font-semibold text-xs transition-transform hover:scale-[1.03] whitespace-nowrap"
-              >
-                Start Free
-              </Link>
-            </div>
+          {/* Top strip: just the compact CTA now, right-aligned, so something
+              actionable is visible before any scroll on every screen with
+              room for it. (On phones the one full CTA lower down is enough —
+              see HeroCtas' lg:hidden placement below.) The updates banner
+              used to live here too; it's now its own full-width row below,
+              spanning the same container as the grid underneath it. */}
+          <div className="flex justify-end mb-4 sm:mb-5 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+            <Link
+              href="/auth/signup"
+              className="hidden sm:inline-flex shrink-0 items-center bg-gray-900 hover:bg-black text-white px-3.5 py-1.5 rounded-full font-semibold text-xs transition-transform hover:scale-[1.03] whitespace-nowrap"
+            >
+              Start Free
+            </Link>
+          </div>
+
+          {/* Full-width updates banner — same left/right edges as the grid
+              below since it shares this same max-w-6xl/px-4 container. */}
+          <div className="mb-8 sm:mb-10 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
+            <AnnouncementTicker announcements={updates} count={5} now={now} />
           </div>
 
           {/* 12-col grid, ~5/7 split. `order` keeps the mobile reading order
