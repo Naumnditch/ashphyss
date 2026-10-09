@@ -24,8 +24,24 @@ interface Question {
   imageUrl?: string | null;
   answerType: 'multiple_choice' | 'numeric' | 'free_text';
   difficultyLevel: number;
+  marks?: number | null;
   options: Option[];
   solutionId?: string | null;
+}
+
+// Foundation/Intermediate/Challenging/Stretch tier badge, derived from difficulty_level.
+// Purely presentational — it reads the same column every bank already has, so it
+// lights up for older questions too (1→Foundation, 2→Intermediate, 3→Challenging,
+// 4+→Stretch), not just the new AS kinematics/accelerated-motion banks.
+const TIER_LABELS: Record<number, { label: string; className: string }> = {
+  1: { label: 'Foundation', className: 'bg-green-50 text-green-700 border-green-200' },
+  2: { label: 'Intermediate', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  3: { label: 'Challenging', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+};
+const STRETCH_TIER = { label: 'Stretch', className: 'bg-violet-50 text-violet-700 border-violet-200' };
+
+function tierBadge(difficultyLevel: number) {
+  return TIER_LABELS[difficultyLevel] ?? STRETCH_TIER;
 }
 
 interface Mastery {
@@ -295,9 +311,21 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
       {/* Question card */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mb-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <span className="text-sm font-semibold text-gray-900">
-            Question {current.number} <span className="font-normal text-gray-400">of {queue.length}</span>
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-900">
+              Question {current.number} <span className="font-normal text-gray-400">of {queue.length}</span>
+            </span>
+            <span
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${tierBadge(current.difficultyLevel).className}`}
+            >
+              {tierBadge(current.difficultyLevel).label}
+            </span>
+            {!!current.marks && (
+              <span className="text-[11px] font-medium text-gray-400">
+                {current.marks} mark{current.marks === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
           {!result && statuses[current.id] === 'correct' && (
             <span className="text-xs font-medium text-green-700">✓ You got this right before — answer again to practise</span>
           )}

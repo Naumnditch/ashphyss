@@ -10,6 +10,7 @@
  */
 
 import { CIRCULAR_GRAVITY_DIAGRAMS } from './CircularGravityDiagrams';
+import { KINEMATICS_DIAGRAMS } from './KinematicsDiagrams';
 
 const INK = '#1b2a41';
 const MUTE = '#4a5a72';
@@ -605,6 +606,7 @@ const DIAGRAMS: Record<string, React.ReactNode> = {
   ...COULOMB_DIAGRAMS,
   ...WORKSHEET_DIAGRAMS,
   ...CIRCULAR_GRAVITY_DIAGRAMS,
+  ...KINEMATICS_DIAGRAMS,
   'momentum-stick-1': (
     <Frame>
       <Trolley x={40} y={70} width={70} mass="2 kg" arrow={{ label: '6 m/s', dir: 1, color: TEAL }} />

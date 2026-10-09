@@ -65,6 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: { topicId: str
     imageUrl: p.question_image_url,
     answerType: p.answer_type,
     difficultyLevel: p.difficulty_level,
+    marks: p.points,
     options: p.options,
     solutionId: p.solution_id && p.solution_published ? p.solution_id : null,
   }));
