@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
+Last updated: 2026-10-13 (17.4 Coulomb's law: CHALLENGING tier Q60–Q99, 40 questions incl. 23 suspended-charge problems, two last-digit fixes to Q40/Q58 — see "17.4 Coulomb CHALLENGING tier" below. ALSO: Vercel now builds from `ashphys` `main`, not `ashphyss` — see "Live site"). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
 
 ---
 
@@ -13,12 +13,96 @@ Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier
 
 - Production: **www.ashphys.org** (aliases: ashphys.org, ashphyss.vercel.app)
 - Owner/admin login: `naumnditch572@gmail.com` (role=admin in the `users` table)
-- GitHub (code, push here): `github.com/Naumnditch/ashphys.git` → branch `main`
-- GitHub (Vercel actually watches this one — **double s**): `github.com/Naumnditch/ashphyss.git` → branch `master`
-- Standard deploy command from repo root:
-  `git push origin main && git push ashphyss main:master --force`
+- GitHub: `github.com/Naumnditch/ashphys.git` → branch `main` **is the production branch**
+  (verified 2026-10-13 from the Vercel project: every production deployment's
+  git source is `Naumnditch/ashphys@main`, and pushes to other `ashphys`
+  branches create preview deployments). The Vercel project is still *named*
+  `ashphyss`, which is where the old "double s" note came from.
+- `github.com/Naumnditch/ashphyss.git` (double s) is no longer what Vercel
+  builds; its `master` is a stale mirror (it lacks the HelpCta commit that is
+  live). Pushing there does not deploy.
+- Standard deploy: `git push origin main` (from the `ashphys` clone).
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
+
+### 17.4 Coulomb CHALLENGING tier, Q60–Q99 (NEW 2026-10-13)
+- 40 new questions appended to the IGCSE bank of "17.4 Coulomb's law
+  (extension)" (topic `c6c1d1f5-…`), all difficulty 4–5, which the worksheet
+  PDF tags CHALLENGING (the practice page shows 4+ as "Stretch", exactly like
+  the existing Q44/46/47/58). The bank is now 99 rows. **Numbering starts at
+  Q60, not Q59**: the bank already had a Q59 — an unanswered "(a)/(b) four
+  charges on a square, side d" stub (answer_correct NULL, created 2026-09-27,
+  linked to the "Four Charges on a Square" interactive solution). It was left
+  untouched; it cannot be graded as it stands (see TODO below).
+- By type: 23 suspended-charge (Q60–Q82: Q38-style fixed ball ×3 incl.
+  unequal charges and attraction, two balls from one point ×3, unequal
+  charges/equal masses ×2 incl. a Newton's-third-law MCQ, unequal masses ×1
+  plus extended, inverse small-angle x³ = 2kq²L/mg ×1, approximation-validity
+  MCQ ×1, charge sharing ×2, doubling-trap MCQs ×2, vertical tension and
+  levitation ×2, uniform horizontal field ×1 plus extended, data analysis
+  F vs 1/r² ×1, common-slip MCQ ×1, 4 extended 8–10-mark (a)–(d) questions);
+  17 other (collinear net force and zero-force quadratic with a rejected root,
+  equilibrium between like charges, three-charge equilibrium (sign-sensitive),
+  stability MCQ, square and rectangle with mixed signs, charge at a square's
+  centre, e–p force ratio from constants + "explain in words" MCQ, oil drop
+  + 8-mark oil-drop extended, three graph questions, unit-slip and
+  centre-to-centre MCQs). 30 numeric, 10 MCQ, 6 multi-part 8–10 marks.
+- Format is the bank's own: one graded answer per question (multi-part
+  questions grade one named part, the rest is worked in the explanation),
+  step-by-step explanation ending "Common mistake:", every suspended-charge
+  solution starts with the free-body diagram (T, mg, Fe). k = 9.0 × 10⁹,
+  g = 9.8 N/kg stated in every question that uses them. `points` holds the
+  real marks (3–10).
+- Data: `database/seeds/2026-10-13-coulomb-challenge.py` (edit this) →
+  `.sql` beside it and `components/practice/coulombChallengeDiagramData.ts`
+  (both generated). Inverse angle problems solved exactly with
+  `scipy.optimize.brentq`. Applied to Supabase 2026-10-13 via `execute_sql`
+  in 6 batches, then every row + option checksummed (md5) against the file:
+  40/40 match.
+- Figures: `components/practice/CoulombChallengeDiagrams.tsx` — parametric
+  SVG in Q38's style (hatched support, dashed vertical, angle arc, brass
+  insulating rod, dimension arrows, no force arrows): `SuspendedAndFixed`,
+  `SharedPivotPair` (incl. "level" unequal-length threads), `VerticalPair`,
+  `FieldPendulum`, `ReadingsTable`, `ChargesOnLine`, `CornerCharges`,
+  `OilDropPlates`, `ForceGraph`, `SpheresWithGap`; merged into `getDiagram()`.
+  37 figures (Q91/92 have none, Q98 reuses `coulomb-two-charges`).
+- **Fixes to the old bank (verified, both already inside grading tolerance,
+  so no past attempt changes):** Q40 0.974 → 0.973 N (√(0.54² + 0.81²) =
+  0.9735) and Q58 0.275 → 0.276 N (0.144√2 + 0.072 = 0.2757). Everything
+  else in Q1–58 recomputes to its stored value at its stated s.f.
+- Tests: `database/seeds/tests/test_coulomb_17_4_answers.py` (13 tests, run
+  `python3 -m pytest database/seeds/tests -q`, needs scipy): independently
+  recomputes every numeric answer of Q1–58 (snapshot of the live values) and
+  Q60–99 and compares at the stored s.f., checks geometry (θ < 90°, r < 2L,
+  taut threads, 3-4-5 diagonal, rejected quadratic root), units/signs,
+  constants stated, FBD + common-mistake present, no near-clones
+  (difflib < 0.8), harder than STANDARD (marks). Vitest
+  `lib/practice/__tests__/coulombChallengeSeed.test.ts` (120 tests): real
+  grader on every answer (bare, with unit, 3 s.f., 10% off, prefixed units,
+  sign-sensitive Q86, small-angle shortcut rejected on Q79), MCQs 4 options
+  1 correct, every figure renders finite SVG, full-tier worksheet PDF
+  paginates (17 A4 pages for the 40, every page starts on a question, header
+  count, footers) and the answer key marks every answer. worksheetPdf.test's
+  React-parity check covers the new figures. Full suite 1372/1373 (the 1 is
+  the known live-DNS test), `tsc` clean, `next build` clean (font stub +
+  a dummy JWT_SECRET locally).
+- Deployed: `ashphys` `main` `91739d2` → Vercel production
+  `dpl_EiVbYspjQqzWQBcXBvq6xhY5R7WJ`, READY, aliased to www.ashphys.org.
+  Live check (anonymous, via the Vercel fetch tool — the sandbox proxy
+  blocks ashphys.org): the lesson page reports 99 IGCSE questions, and the
+  worksheet endpoint still redirects logged-out users to /auth/login. The
+  logged-in practice page and PDF download were NOT checked live (no login
+  possible from the sandbox), only locally against the same code.
+- Not done / needs a decision:
+  - Randomised/parameterised variants: the platform has none (one stored
+    answer per row, graded server-side), so none were made — it would need a
+    seeded-variant schema + grader change.
+  - Free preview: gating is per lesson (`topics.required_tier`, 0 for 17.4),
+    there is no per-question preview, so nothing changed.
+  - TODO: the Q59 stub needs an answer (or splitting into gradable parts)
+    — today every submission to it is marked wrong.
+  - No sitemap or hard-coded counts exist; header/page counts and the
+    question map are computed from the DB.
 
 ### AS Level Kinematics & Accelerated motion practice banks (NEW 2026-10-09)
 - A fresh, tier-ordered 20-question (Q1-Q20) AS-curriculum bank for every
@@ -641,8 +725,9 @@ Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier
   (´ ’ Ω Δ · —, etc.), never `\u` escapes. Scan for `u2019|u0394|u00B2|u2014|
   u2212|u03A9` etc. before every deploy — this has bitten nearly every
   simulation file at least once.
-- **Two GitHub repos**: pushing only to `ashphys` does nothing on the live
-  site — Vercel watches `ashphyss` (double s). Always push both.
+- **Two GitHub repos** (corrected 2026-10-13): Vercel now builds production
+  from `ashphys` `main`. `ashphyss` (double s) is a stale mirror and pushing
+  there deploys nothing. (Older notes in this file say the opposite.)
 - **`tsc --noEmit` isn't enough** for anything nontrivial — it's passed clean
   while real Next.js builds still failed on things like the Google Fonts
   network call this sandbox can't reach. Standard workaround: temporarily
