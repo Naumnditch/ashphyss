@@ -10,3 +10,7 @@
 /.env.production
 /.env.local
 node_modules
+
+# Python
+__pycache__/
+*.pyc
