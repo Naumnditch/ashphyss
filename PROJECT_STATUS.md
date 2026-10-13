@@ -25,6 +25,24 @@ Last updated: 2026-10-13 (17.4 Coulomb's law: CHALLENGING tier Q60–Q99, 40 que
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
 
+### 17.4 Coulomb's law now visible in A Level and IB (2026-10-13)
+- The 17.4 lesson is ONE shared topic (`c6c1d1f5-…`) listed in IGCSE, A Level
+  (22.2) and IB (D.2), but every question was filed under `curriculum_id =
+  'igcse'`, so the A Level and IB lesson pages said "There are no practice
+  questions for this lesson yet" (the practice bank is per curriculum).
+- `database/seeds/2026-10-13-coulomb-17-4-shared-banks.sql` copies the IGCSE
+  bank into an A Level bank and an IB bank inside the database (INSERT …
+  SELECT, md5-derived ids, idempotent): 98 questions each, numbered 1–98 —
+  Q1–58 plus the whole CHALLENGING tier incl. the 23 suspended-charge
+  problems and their figures (IGCSE Q60–99 = A Level/IB Q59–98). The Q59 stub
+  (no answer) was not copied. topic_code 22.2 / D.2, syllabus_cite
+  "9702 coursebook 22.2 · Coulomb's law" / "IB D.2 Electric and magnetic
+  fields". Applied 2026-10-13, verified: 196 copies identical to their
+  sources (text, answer, tolerance, explanation, figure, marks, options,
+  solution link). Live lesson pages now show 98 A Level / 98 IB questions.
+- The banks are copies: a future edit to an IGCSE 17.4 row must be repeated
+  on its A Level and IB copies (find them via the md5 id in the seed).
+
 ### 17.4 Coulomb CHALLENGING tier, Q60–Q99 (NEW 2026-10-13)
 - 40 new questions appended to the IGCSE bank of "17.4 Coulomb's law
   (extension)" (topic `c6c1d1f5-…`), all difficulty 4–5, which the worksheet
