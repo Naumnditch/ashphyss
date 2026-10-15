@@ -6,6 +6,7 @@
 import {
   CURRICULA,
   compareTopicCodes,
+  courseChapterNumber,
   findSection,
   lessonTitle,
   syllabusFor,
@@ -59,7 +60,7 @@ export interface LessonGroup {
   label: string;
   title: string;
   level?: string;
-  /** IGCSE groups are coursebook chapters, so they link to the chapter page. */
+  /** The `chapters` row the group is (IGCSE and 9702 coursebook chapters), so it links to the chapter page. */
   chapterId?: string;
   lessons: CurriculumLesson[];
 }
@@ -99,11 +100,12 @@ function unitLabel(curriculumId: CurriculumId, unitCode: string): string {
  * Groups lessons the way the curriculum itself is organised.
  *
  * IGCSE follows the coursebook the lessons were written from, so it groups by
- * chapter, as the site always has. AS, A Level and IB group by syllabus unit —
- * for 9702 those units are the coursebook's own chapters — because their
- * lessons come from more than one course: a
- * shared IGCSE lesson with a simulation sits in the same unit as the 9702
- * lessons around it. Lessons whose code matches no unit land in a final
+ * chapter, as the site always has. AS, A Level and IB group by topic code,
+ * because their lessons come from more than one course: a shared IGCSE lesson
+ * with a simulation sits with the lessons around it. For 9702 the codes are
+ * coursebook section numbers, so each group is a coursebook chapter, named
+ * and linked from its `chapters` row; syllabi.ts only fills in for a chapter
+ * with no row yet. Lessons whose code matches no unit land in a final
  * "Other lessons" group rather than disappearing.
  */
 export function groupLessons(rows: LessonRow[], curriculumId: CurriculumId): LessonGroup[] {
@@ -129,13 +131,22 @@ export function groupLessons(rows: LessonRow[], curriculumId: CurriculumId): Les
     return [...byChapter.values()];
   }
 
-  const groups: LessonGroup[] = syllabusFor(curriculumId).map((unit) => ({
-    key: unit.code,
-    label: unitLabel(curriculumId, unit.code),
-    title: unit.title,
-    level: unit.level,
-    lessons: [],
-  }));
+  const courseChapters = new Map<number, { id: string; title: string }>();
+  for (const row of lessons) {
+    if (row.course_code === '9702') courseChapters.set(row.chapter_number, { id: row.chapter_id, title: row.chapter_title });
+  }
+  const groups: LessonGroup[] = syllabusFor(curriculumId).map((unit) => {
+    const number = CURRICULA[curriculumId].syllabusCode === '9702' ? courseChapterNumber(unit.code) : null;
+    const chapter = number === null ? undefined : courseChapters.get(number);
+    return {
+      key: unit.code,
+      label: unitLabel(curriculumId, unit.code),
+      title: chapter?.title ?? unit.title,
+      level: unit.level,
+      chapterId: chapter?.id,
+      lessons: [],
+    };
+  });
   const other: LessonGroup = { key: 'other', label: 'More', title: 'Other lessons', lessons: [] };
 
   const sorted = [...lessons].sort(

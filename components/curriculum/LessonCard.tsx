@@ -56,7 +56,9 @@ export function LessonCard({ lesson, selectedCurriculum, tier, showMetadata = tr
         {showMetadata && (
           <p className="text-xs italic text-gray-500 mt-1">
             {syllabusRefLabel(selectedCurriculum, lesson.topicCode)}
-            {lesson.sectionTitle && lesson.topicCode !== 'Maths' && <> · {lesson.sectionTitle}</>}
+            {lesson.sectionTitle && lesson.topicCode !== 'Maths' && lesson.sectionTitle !== lesson.title && (
+              <> · {lesson.sectionTitle}</>
+            )}
           </p>
         )}
         {showMetadata && lesson.syllabusReference && (

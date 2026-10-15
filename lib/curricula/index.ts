@@ -143,12 +143,21 @@ export function stripSectionNumber(topicName: string): string {
   return topicName.replace(/^\d+(\.\d+)*\s+/, '');
 }
 
-/** "9702 AS – Topic 2.1", or just "9702 AS" when a lesson has no code yet. */
+/**
+ * Where a lesson sits in its curriculum: "0625 – Topic 1.2", "IB Physics –
+ * Topic A.1", or just "9702 AS" when a lesson has no code yet.
+ *
+ * AS and A Level codes are the coursebook's section numbers (1.4 is section 4
+ * of chapter 1, Kinematics), not 9702 syllabus topics, so they read
+ * "Coursebook 1.4 (9702 AS)": labelled "Topic 1.4" they would point at the
+ * wrong part of the 9702 syllabus, whose topic 1 is Physical quantities.
+ */
 export function syllabusRefLabel(curriculumId: CurriculumId, topicCode: string | null): string {
   const c = CURRICULA[curriculumId];
   if (!topicCode) return c.syllabusLabel;
   if (topicCode === 'Maths') return `${c.syllabusLabel} – Mathematical requirements`;
   if (topicCode.startsWith('Tool')) return `${c.syllabusLabel} – ${topicCode}`;
+  if (c.syllabusCode === '9702') return `Coursebook ${topicCode} (${c.syllabusLabel})`;
   return `${c.syllabusLabel} – Topic ${topicCode}`;
 }
 
@@ -245,6 +254,13 @@ const PRACTICAL_CHAPTERS: Record<number, string> = {
   [AS_PRACTICAL_CHAPTER]: 'P1',
   [A_LEVEL_PRACTICAL_CHAPTER]: 'P2',
 };
+
+/** The `chapters.chapter_number` of a 9702 coursebook chapter code: "12" → 12, "P1" → 32. */
+export function courseChapterNumber(unitCode: string): number | null {
+  if (unitCode === 'P1') return AS_PRACTICAL_CHAPTER;
+  if (unitCode === 'P2') return A_LEVEL_PRACTICAL_CHAPTER;
+  return /^\d+$/.test(unitCode) ? Number(unitCode) : null;
+}
 
 /**
  * How a chapter is named in its course: IGCSE coursebook "Chapter 3", 9702

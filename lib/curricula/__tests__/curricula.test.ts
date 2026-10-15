@@ -100,7 +100,8 @@ describe('lesson naming', () => {
   });
 
   it('labels the syllabus reference the way the spec shows it', () => {
-    expect(syllabusRefLabel('as', '2.1')).toBe('9702 AS – Topic 2.1');
+    expect(syllabusRefLabel('as', '2.1')).toBe('Coursebook 2.1 (9702 AS)');
+    expect(syllabusRefLabel('a-level', 'P2.3')).toBe('Coursebook P2.3 (9702 A Level)');
     expect(syllabusRefLabel('igcse', '1.2')).toBe('0625 – Topic 1.2');
     expect(syllabusRefLabel('a-level', 'Maths')).toBe('9702 A Level – Mathematical requirements');
     expect(syllabusRefLabel('ib', 'Tool 3')).toBe('IB Physics – Tool 3');
@@ -188,11 +189,11 @@ describe('groupLessons', () => {
     expect(groups[0].chapterId).toBe('c1');
   });
 
-  it('groups AS by syllabus unit, mixing shared and 9702 lessons', () => {
+  it('groups AS by coursebook chapter, mixing shared and 9702 lessons', () => {
     const rows = [
-      row({ id: 'kirchhoff', topic_name: "Kirchhoff's laws", curriculum_ids: ['as', 'a-level'], as_topic_code: '9.3', a_level_topic_code: '9.3', course_code: '9702', chapter_number: 9 }),
+      row({ id: 'kirchhoff', topic_name: "Kirchhoff's laws", curriculum_ids: ['as', 'a-level'], as_topic_code: '9.3', a_level_topic_code: '9.3', course_code: '9702', chapter_id: 'cb9', chapter_number: 9, chapter_title: "Kirchhoff's laws" }),
       row({ id: 'dt', topic_name: '2.2 Distance-time graphs', curriculum_ids: ['igcse', 'as', 'a-level'], topic_code: '1.2', as_topic_code: '2.8', a_level_topic_code: '2.8', chapter_number: 2 }),
-      row({ id: 'suvat', topic_name: 'Equations of motion', curriculum_ids: ['as', 'a-level', 'ib'], as_topic_code: '2.8', a_level_topic_code: '2.8', ib_topic_code: 'A.1', course_code: '9702', chapter_number: 2 }),
+      row({ id: 'suvat', topic_name: 'Equations of motion', curriculum_ids: ['as', 'a-level', 'ib'], as_topic_code: '2.8', a_level_topic_code: '2.8', ib_topic_code: 'A.1', course_code: '9702', chapter_id: 'cb2', chapter_number: 2, chapter_title: 'Accelerated motion' }),
       row({ id: 'igcse-only', topic_name: '1.1 Measuring length', topic_code: '1.1' }),
       row({ id: 'circles', topic_name: '3.7 Circular motion (extension)', curriculum_ids: ['igcse', 'a-level'], topic_code: '1.5.1', a_level_topic_code: '16.2', chapter_number: 3 }),
     ];
@@ -202,6 +203,8 @@ describe('groupLessons', () => {
       "Chapter 9: Kirchhoff's laws",
     ]);
     expect(groups[0].level).toBe('AS');
+    // Each group is the 9702 `chapters` row, so it links to that chapter's page.
+    expect(groups.map((g) => g.chapterId)).toEqual(['cb2', 'cb9']);
     // Within a unit, the IGCSE-coursebook lesson (chapter 2) and the 9702 one share code 2.1.
     expect(groups[0].lessons.map((l) => l.title)).toEqual(['Distance-time graphs', 'Equations of motion']);
     const shared = groups[0].lessons[0];
@@ -214,6 +217,31 @@ describe('groupLessons', () => {
 
     const aLevel = groupLessons(rows, 'a-level').map((g) => g.title);
     expect(aLevel).toEqual(['Accelerated motion', "Kirchhoff's laws", 'Circular motion']);
+  });
+
+  it('names AS and A Level chapters from the chapters table, P1 and P2 included', () => {
+    const rows = [
+      row({ id: 'speed', topic_name: 'Speed', curriculum_ids: ['as', 'a-level'], as_topic_code: '1.1', a_level_topic_code: '1.1', course_code: '9702', chapter_id: 'cb1', chapter_number: 1, chapter_title: 'Kinematics (coursebook)' }),
+      row({ id: 'vectors', topic_name: 'Vectors: Addition & Resolution', curriculum_ids: ['igcse', 'as', 'a-level'], topic_code: 'Maths', as_topic_code: '1.5', a_level_topic_code: '1.5', chapter_id: 'igcse0', chapter_number: 0, chapter_title: 'Prep Physics' }),
+      row({ id: 'p1', topic_name: 'Errors and uncertainties', curriculum_ids: ['as', 'a-level'], as_topic_code: 'P1.4', a_level_topic_code: 'P1.4', course_code: '9702', chapter_id: 'cb32', chapter_number: 32, chapter_title: 'Practical skills at AS Level' }),
+      row({ id: 'p2', topic_name: 'Planning', curriculum_ids: ['a-level'], a_level_topic_code: 'P2.1', course_code: '9702', chapter_id: 'cb33', chapter_number: 33, chapter_title: 'Practical skills at A Level' }),
+      row({ id: 'shm', topic_name: 'Oscillations', curriculum_ids: ['a-level'], a_level_topic_code: '17.1', course_code: '9702', chapter_id: 'cb17', chapter_number: 17, chapter_title: 'Oscillations' }),
+    ];
+    const as = groupLessons(rows, 'as');
+    expect(as.map((g) => `${g.label}: ${g.title} → ${g.chapterId}`)).toEqual([
+      'Chapter 1: Kinematics (coursebook) → cb1',
+      'P1: Practical skills at AS Level → cb32',
+    ]);
+    // The shared IGCSE lesson sits in coursebook chapter 1, not its own IGCSE chapter.
+    expect(as[0].lessons.map((l) => l.id)).toEqual(['speed', 'vectors']);
+
+    const aLevel = groupLessons(rows, 'a-level');
+    expect(aLevel.map((g) => `${g.label}: ${g.title}`)).toEqual([
+      'Chapter 1: Kinematics (coursebook)',
+      'P1: Practical skills at AS Level',
+      'Chapter 17: Oscillations',
+      'P2: Practical skills at A Level',
+    ]);
   });
 
   it('never drops a lesson whose code the syllabus doesn’t list', () => {
