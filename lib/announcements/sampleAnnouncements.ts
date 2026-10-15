@@ -1,12 +1,110 @@
 import type { Announcement } from './types';
 
 /**
- * Sample feed: this week's real releases, with real links, so the feed is
- * testable and truthful from day one. Replace with rows from the database
- * (or add to this list) as new content ships — the feed only needs the
- * Announcement shape.
+ * The "What's new" feed (homepage, hero ticker and /updates). This list IS
+ * the feed: nothing is pulled from the database, so every release has to be
+ * added here by hand when it ships, or the feed goes stale. Newest first by
+ * convention (the feed sorts by date anyway). `status` ('new' / 'updated')
+ * is only set on simulations, as it always has been.
  */
 export const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: 'dark-mode',
+    type: 'platform',
+    title: 'Dark mode',
+    description: 'Switch between light, dark or your device’s setting from the navbar. Simulations and diagrams change with it.',
+    date: '2026-10-14T16:05:00Z',
+    href: '/',
+  },
+  {
+    id: 'practice-coulomb-challenging',
+    type: 'quiz',
+    title: "40 harder Coulomb's law questions",
+    description: 'A new Challenging tier, including 23 suspended-charge problems with free-body diagrams. Now in the A Level and IB banks too.',
+    date: '2026-10-13T09:40:00Z',
+    href: '/practice/c6c1d1f5-1c6b-4ab4-a15b-beea25426304',
+  },
+  {
+    id: 'practice-as-kinematics',
+    type: 'quiz',
+    title: 'AS Level Kinematics and Accelerated motion: 440 questions',
+    description: '20 questions for every lesson in Chapters 1 and 2, from Foundation to Stretch, with diagrams and full worked answers.',
+    date: '2026-10-09T07:55:00Z',
+    href: '/curriculum/4653a171-76f9-4b44-bc1d-19802787195f?c=as',
+  },
+  {
+    id: 'help-cta',
+    type: 'platform',
+    title: 'Need help? Ask from any page',
+    description: 'The new “Need help?” button lets you request a video explanation or book a tutoring session wherever you are.',
+    date: '2026-10-06T06:50:00Z',
+    href: '/video-requests',
+  },
+  {
+    id: 'practice-circular-gravitation-challenge',
+    type: 'quiz',
+    title: 'Circular motion and gravitation challenge set',
+    description: 'Ten harder questions in each lesson, from the conical pendulum to orbits, each with a worked answer.',
+    date: '2026-10-05T21:40:00Z',
+    href: '/practice/db2c98d5-dd86-5faf-9121-5533bdd5d212',
+  },
+  {
+    id: 'rearranger-cross-multiplication',
+    type: 'simulation',
+    status: 'updated',
+    title: 'Equation Rearranger: cross-multiplication shortcut',
+    description: 'When the unknown is in a denominator, it now swaps across the equals sign in one move: F = GMm/r² becomes r² = GMm/F.',
+    date: '2026-10-01T19:45:00Z',
+    href: '/simulations/equation-rearranger',
+  },
+  {
+    id: 'practice-as-a-level-banks',
+    type: 'quiz',
+    title: 'Practice for every AS and A Level lesson',
+    description: 'More than 1,400 new questions across 200 AS and A Level lessons, each with a full worked answer.',
+    date: '2026-09-30T22:45:00Z',
+    href: '/curriculum?c=a-level',
+  },
+  {
+    id: 'as-a-level-coursebook-chapters',
+    type: 'lesson',
+    title: 'AS and A Level now follow the coursebook',
+    description: 'Lessons are grouped by coursebook chapter, so you can find your place in class straight away.',
+    date: '2026-09-30T21:50:00Z',
+    href: '/curriculum?c=as',
+  },
+  {
+    id: 'practice-a-level-circular-gravitation',
+    type: 'quiz',
+    title: 'A Level circular motion and gravitation practice',
+    description: '99 exam-style questions with 46 original diagrams: radians, centripetal force, fields, potential and orbits.',
+    date: '2026-09-30T07:15:00Z',
+    href: '/curriculum/801c5055-fda8-4ba9-91e0-37babe0c2bad?c=a-level',
+  },
+  {
+    id: 'curricula-as-a-level-ib',
+    type: 'lesson',
+    title: 'AS Level, A Level and IB Physics are here',
+    description: 'Pick your course from the curriculum menu: Cambridge AS and A Level (9702) and IB Physics now sit alongside IGCSE.',
+    date: '2026-09-29T13:35:00Z',
+    href: '/curriculum',
+  },
+  {
+    id: 'interactive-solutions',
+    type: 'platform',
+    title: 'Interactive step-by-step solutions',
+    description: 'Some practice questions now link to an animated, step-by-step solution, starting with Four Charges on a Square.',
+    date: '2026-09-27T12:10:00Z',
+    href: '/practice/c6c1d1f5-1c6b-4ab4-a15b-beea25426304',
+  },
+  {
+    id: 'messages',
+    type: 'platform',
+    title: 'Messages from your teacher',
+    description: 'A new inbox in your dashboard for messages from AshPhys, with replies by email or on the site.',
+    date: '2026-09-25T17:30:00Z',
+    href: '/dashboard/messages',
+  },
   {
     id: 'rearranger-manim',
     type: 'simulation',

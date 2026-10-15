@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
+Last updated: 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep because nobody added entries — see "What's New feed was stale" under the homepage feed section). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
 
 ---
 
@@ -3226,6 +3226,27 @@ and in full at `/updates`.
   table with an admin form is the natural next step.
 - The homepage hero film now has `id="film"` so the video announcement can
   link to it.
+
+### What's New feed was stale (fixed 2026-10-15)
+- Symptom: the newest entry on the homepage, the hero ticker and `/updates`
+  was 24 Sep 2026 although lots shipped after. Root cause: the feed is
+  ONLY the hand-kept array in `lib/announcements/sampleAnnouncements.ts`
+  (no DB table, no API; the pages are `force-dynamic`, so nothing was
+  cached), and no release since 24 Sep added an entry. Display logic
+  (sort, counts, badges) was fine.
+- Added 12 entries, dated from the commits and `problems.created_at`:
+  messages (25 Sep), interactive solutions (27 Sep), AS/A Level/IB
+  curricula (29 Sep), A Level circular motion & gravitation (30 Sep), 1,400+
+  AS/A Level questions (30 Sep), coursebook chapters (30 Sep), Equation
+  Rearranger cross-multiplication (1 Oct, simulation, UPDATED), circular &
+  gravitation challenge set (5 Oct), Need help? button (6 Oct), AS
+  Kinematics 440 questions (9 Oct), Coulomb CHALLENGING tier + A Level/IB
+  (13 Oct), dark mode (14 Oct). New/Updated badges stay simulation-only.
+- `format.test.ts` now checks the list is written newest first, dates parse
+  and badges are only on simulations.
+- **When you ship anything user-visible, add an entry to
+  `sampleAnnouncements.ts` in the same commit.** (A DB table + admin form
+  would remove this chore.)
 
 ## Messaging / mailbox (2026-09-25)
 

@@ -30,4 +30,12 @@ describe('sorting', () => {
     SAMPLE_ANNOUNCEMENTS.forEach((a) => expect(a.href.startsWith('/')).toBe(true));
     expect(new Set(SAMPLE_ANNOUNCEMENTS.map((a) => a.type)).size).toBe(5);
   });
+
+  it('keeps the hand-kept list newest first, with valid dates and badges only on simulations', () => {
+    expect(sortNewestFirst(SAMPLE_ANNOUNCEMENTS)).toEqual(SAMPLE_ANNOUNCEMENTS);
+    SAMPLE_ANNOUNCEMENTS.forEach((a) => {
+      expect(Number.isNaN(Date.parse(a.date))).toBe(false);
+      if (a.status) expect(a.type).toBe('simulation');
+    });
+  });
 });
