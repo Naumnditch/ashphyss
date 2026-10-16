@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { query } from '@/lib/db/client';
 import { grantSubscription, revokeSubscription } from '@/lib/access/grant';
+import { currentPlanName, logAdminStudentEvent } from '@/lib/admin/studentEvents';
 
 export async function POST(req: NextRequest) {
   const admin = await getCurrentUser();
@@ -62,6 +63,9 @@ export async function PATCH(req: NextRequest) {
   }
   const { studentId } = await req.json();
   if (!studentId) return NextResponse.json({ success: false, error: 'studentId required' }, { status: 400 });
+  const previousPlan = await currentPlanName(studentId);
   await revokeSubscription(studentId);
+  // Grants are already in access_grants; this gives revocations a history too.
+  await logAdminStudentEvent(admin.id, studentId, 'admin_subscription_revoke', { previous_plan: previousPlan });
   return NextResponse.json({ success: true });
 }

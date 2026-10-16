@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep because nobody added entries — see "What's New feed was stale" under the homepage feed section). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
+Last updated: 2026-10-16 (new admin student history page at `/admin/students` + logging of admin revocations/account changes — see "Admin student history & activity" below). Previously 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep because nobody added entries — see "What's New feed was stale" under the homepage feed section). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
 
 ---
 
@@ -19,6 +19,89 @@ Last updated: 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep be
   `git push origin main && git push ashphyss main:master --force`
 - Supabase project: `ashphys-platform` (id `uolwvcszclviqrtyxwgl`, eu-central-1)
 - Vercel project: `ashphyss` (id `prj_7lk98vPTJcP5ScK1syAZA0aPgTNV`), team `abdelrahman-elashmawys-projects`
+
+### Admin student history & activity (NEW 2026-10-16)
+
+**`/admin/students`** (sidebar: People → Students) lists every `role = 'student'`
+account: name, email, current tier (Free/Plus/Pro), subscription status and
+expiry, join date, last active, questions attempted and accuracy. Search
+(name/email), sort (any column) and paging (50 per page) all run in SQL
+(`listStudents` in `lib/admin/students.ts`). Below `md` the table becomes cards
+with a sort strip. `/admin/users` now links student names here too.
+
+**`/admin/students/[id]`** shows:
+- Profile & subscription: tier badge, status (active until / expired / revoked /
+  Free plan), plan and billing cycle, start, joined, last active, last login,
+  account status and device count. Links to Subscriber access, Messages and the
+  existing practice drill-down (`/teacher/analytics/[id]`, which admins can open).
+- Summary: questions + accuracy, topics practised / lessons opened / mastered,
+  strongest and weakest chapter (by `practice_attempts` accuracy, only chapters
+  with ≥ 5 answers; no "weakest" unless two qualify), estimated active time per
+  week for 12 weeks (bar chart + "Show as a table"), and accuracy per chapter.
+- Payment history: every `payment_requests` row (plan/course, amount claimed,
+  amount read + currency, detected plan/months + confidence, status,
+  `auto_approved`, reviewer, notes) and every `shopier_orders` checkout.
+- Activity timeline, newest first, 50 per page (Newer/Older), filtered by date
+  range and activity type (GET form, so filtered views are linkable). Page views
+  are off by default because they are the noisiest source.
+
+Times render in the viewer's timezone (`components/admin/LocalTime.tsx`; the
+server pass prints UTC).
+
+Data sources (all existing tables except where noted; `lib/admin/students.ts`
+builds one `UNION ALL` from only the selected types, so unselected sources are
+never scanned):
+
+| Timeline type | Source |
+|---|---|
+| Account & logins | `users.created_at` (sign-up), `analytics_events` login/logout, admin account events (new, below) |
+| Tier changes | `access_grants` (manual and automatic grants; `granted_by IS NULL` = receipt auto-match), revoke events (new), `subscriptions.end_date` once passed ("Paid access ran out") |
+| Payments | `payment_requests` (upload + review/auto-approval), `shopier_orders` (checkout started; `status='success'` = paid), `addon_purchases`, `subscribe_click` / `paywall_shown` events |
+| Lessons & sims | `analytics_events` lesson_view, simulation_start/complete, download, curriculum_select; `course_enrollments`; `activity_events` video_view **only if migration 02 is applied** (checked with `to_regclass`, cached 60 s) |
+| Questions | `practice_attempts` (correct/incorrect, Q number, topic, the answer — MCQ option ids resolved to "chose B: …" — hint, try number), practice_start events, `paper_scores` |
+| Solutions | `solution_access_log` (view_full / view_preview / blocked / attempted_upgrade) |
+| Requests & messages | `video_requests`, `messages` sent/received (subject only) |
+| Page views | `analytics_events` page_view |
+
+Active time per week is an estimate: the gaps between consecutive recorded
+actions (events, answers, solution opens) are summed when ≤ 15 minutes; longer
+gaps count as breaks. The table also shows "Answering" time from
+`practice_attempts.time_spent_ms` (capped at 30 min per answer). The two differ —
+students often think longer than 15 minutes on one question — so both are shown.
+
+Not found in the schema: no OMR/exam-result table, `quiz_submissions` /
+`student_progress` / `simulation_interactions` are empty and unused by the app,
+and `payment_requests` currently has 0 rows. Last active = the latest of
+`sessions.last_seen_at`, any `analytics_events` row and any answer.
+
+**New logging (starts 2026-10-16; there is no history before that):**
+- `PATCH /api/admin/access` (revoke) → `admin_subscription_revoke` with
+  `{ previous_plan }`. Grants were already in `access_grants`; revocations left
+  no trace before.
+- `PATCH /api/admin/users/[userId]` (role/status change of a student) →
+  `admin_account_update` with `{ role?, status? }`.
+- `POST /api/admin/users/[userId]/revoke-sessions` → `admin_sessions_revoke`
+  with `{ revoked }` (logged for any role, shown on student timelines).
+
+All three go to `analytics_events` with `user_id` = the admin (so daily-active
+counts don't credit the student), `entity_type = 'student'`, `entity_id` = the
+student (`lib/admin/studentEvents.ts`). They use `logEvent`, which swallows its
+own errors, so a logging failure never fails the admin action. These event types
+are not in `EVENT_TYPES`, so the public `/api/analytics/track` sink can't forge
+them (a unit test pins this). No migration was needed.
+
+Access: the pages sit under `app/admin/layout.tsx` (admin only) and read through
+the server-side owner connection like every other admin page; nothing is exposed
+to the browser or the Supabase API roles.
+
+Tests: `lib/admin/__tests__/studentHistory.test.ts` (filter/sort parsing,
+pagination URLs, strongest/weakest, formatting, event-type isolation),
+`app/api/admin/access/__tests__/route.test.ts` (revoke logs with the right
+actor/entity and still succeeds if logging fails; non-admin refused),
+`app/admin/students/__tests__/pages.test.tsx` (both pages render with mocked data;
+filters and pager links). Every SQL query was also run read-only against the
+production database for a real student. Full suite: only the known live-DNS test
+fails. `tsc` and `next build` are clean.
 
 ### AS Level Kinematics & Accelerated motion practice banks (NEW 2026-10-09)
 - A fresh, tier-ordered 20-question (Q1-Q20) AS-curriculum bank for every

@@ -94,7 +94,15 @@ export default async function AdminUsersPage({
               <div key={u.id} className="px-5 py-3.5 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="font-medium text-gray-900 text-[15px] truncate">
-                    {u.first_name} {u.last_name}
+                    {u.role === 'student' ? (
+                      <Link href={`/admin/students/${u.id}`} className="hover:underline">
+                        {u.first_name} {u.last_name}
+                      </Link>
+                    ) : (
+                      <>
+                        {u.first_name} {u.last_name}
+                      </>
+                    )}
                     {currentUser?.id === u.id && <span className="text-gray-400 font-normal"> (you)</span>}
                   </div>
                   <div className="text-xs text-gray-400 truncate">

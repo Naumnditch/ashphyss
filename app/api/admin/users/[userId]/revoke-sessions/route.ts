@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { revokeAllSessions } from '@/lib/auth/sessions';
+import { logAdminStudentEvent } from '@/lib/admin/studentEvents';
 
 export async function POST(req: NextRequest, { params }: { params: { userId: string } }) {
   const admin = await getCurrentUser();
@@ -17,5 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: { userId: str
   }
 
   const revoked = await revokeAllSessions(params.userId);
+  // Logged for every role; only student timelines read it.
+  await logAdminStudentEvent(admin.id, params.userId, 'admin_sessions_revoke', { revoked });
   return NextResponse.json({ success: true, revoked });
 }

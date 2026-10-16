@@ -27,6 +27,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'People',
     items: [
       { href: '/admin/messages', label: 'Messages', icon: 'messages', pending: 'unreadMessages' },
+      { href: '/admin/students', label: 'Students', icon: 'students' },
       { href: '/admin/users', label: 'Users', icon: 'users' },
       { href: '/admin/teacher-applications', label: 'Teacher applications', icon: 'applications', pending: 'teacherApplications' },
       { href: '/admin/sections', label: 'Sections', icon: 'sections' },
