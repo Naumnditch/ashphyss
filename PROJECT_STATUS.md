@@ -5,7 +5,7 @@ This file is the source of truth for "what's actually built and where things
 stand," separate from README_DEVELOPMENT.md (generic setup instructions).
 Update it whenever something significant ships or changes.
 
-Last updated: 2026-10-16 (new admin student history page at `/admin/students` + logging of admin revocations/account changes — see "Admin student history & activity" below). Previously 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep because nobody added entries — see "What's New feed was stale" under the homepage feed section). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
+Last updated: 2026-10-17 (student analytics on `/admin/students/[id]`: right/wrong/skipped/not reached, time on site, strengths and weak points, most-missed questions; practice skips now recorded — see "Student analytics (2026-10-17)" under "Admin student history & activity"). Previously 2026-10-16 (new admin student history page at `/admin/students` + logging of admin revocations/account changes — see "Admin student history & activity" below). Previously 2026-10-15 (What's New feed caught up: it had stopped at 24 Sep because nobody added entries — see "What's New feed was stale" under the homepage feed section). Previously 2026-10-09 (AS Level Kinematics + Accelerated motion: 440 new tier-ordered questions across all 22 lessons of Chapters 1-2, 230 with reusable generated figures — see "AS Level Kinematics & Accelerated motion practice banks" below). Previously 2026-10-06 (Circular Motion & Gravitation Challenge Set: +10 questions in each shared lesson, both banks — see "Challenge set" below). Previously 2026-10-01 (cross-multiplication shortcut in the Equation Rearranger — see "Cross-multiplication in the Equation Rearranger"). Previously 2026-09-30 (A Level units 12–13 practice banks: 99 questions with 46 original figures from the owner's circular motion and gravitation worksheets — see "A Level circular motion & gravitation practice". The multi-curriculum branch reached `master` with it.)
 
 ---
 
@@ -102,6 +102,49 @@ actor/entity and still succeeds if logging fails; non-admin refused),
 filters and pager links). Every SQL query was also run read-only against the
 production database for a real student. Full suite: only the known live-DNS test
 fails. `tsc` and `next build` are clean.
+
+#### Student analytics (2026-10-17)
+
+Clicking anywhere on a row in `/admin/students` now opens the student (the name
+link stretches over the row). The list's "Questions" column counts **distinct
+questions answered** (it used to count every submission, retries included);
+"Accuracy" is still right answers ÷ answers submitted.
+
+`/admin/students/[id]` opens with an analytics block
+(`lib/admin/studentAnalytics.ts` → `components/admin/StudentAnalyticsPanel.tsx`),
+with jump links to Questions · Time & activity · Strengths & weak points ·
+Profile · Payments · Timeline:
+- **Questions:** one stacked bar plus tiles. Right and wrong go by the
+  latest answer to each question. Skipped means skipped and not answered
+  since. Not reached means questions in the lesson banks they opened in
+  practice (topic × curriculum, from their answers and `practice_start`
+  events) that they neither answered nor skipped. Also: first-try right,
+  answer accuracy (with retries), median time per answer, hints used,
+  lessons mastered and best streak.
+- **Time & activity:** last login, last active, time on site (all time, 7 and
+  30 days; same gap-based estimate as before), active days, logins in 30
+  days, practice sessions, lessons opened, simulations, solutions,
+  downloads, video requests. Two charts: weekly time on site, and weekly
+  right vs wrong answers. Both have a table view.
+- **Strengths & weak points:** up to 3 strongest and 3 weakest lessons
+  (`rankByAccuracy`: at least 5 answers, no overlap, ties go to the one with
+  more answers). Accuracy by chapter, by difficulty (1–5) and for every
+  lesson practised (★ = mastered). Also why answers were marked wrong
+  (`grade_reason`: wrong value / wrong unit / unreadable / other).
+- **Questions they keep missing:** the 10 with the most wrong tries, still-wrong
+  ones first, with the question text and their last answer (multiple-choice
+  options resolved to the option text).
+
+Chart colours are `--viz-1`/`--viz-2` in `app/globals.css` (dataviz
+palette slots 1–2, with a separately validated step for dark mode). This is the
+same blue/orange as the admin overview.
+
+**New logging: practice skips.** "Skip for now" in `PracticeSession` now
+sends `practice_skip` (entity = topic, `metadata.problemId`,
+`metadata.curriculum`) through `/api/analytics/track` (added to
+`EVENT_TYPES`). Before this, skips lived only in the student's localStorage,
+so **skip counts start on 2026-10-17**. Skips also appear on the timeline
+under Questions.
 
 ### AS Level Kinematics & Accelerated motion practice banks (NEW 2026-10-09)
 - A fresh, tier-ordered 20-question (Q1-Q20) AS-curriculum bank for every

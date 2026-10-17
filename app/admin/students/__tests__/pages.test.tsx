@@ -8,9 +8,11 @@ const mocks = vi.hoisted(() => ({
   getPaymentHistory: vi.fn(),
   getStudentStats: vi.fn(),
   getTimeline: vi.fn(),
+  getStudentAnalytics: vi.fn(),
 }));
 
 vi.mock('@/lib/admin/students', () => ({ ...mocks, STATS_WEEKS: 12 }));
+vi.mock('@/lib/admin/studentAnalytics', () => ({ getStudentAnalytics: mocks.getStudentAnalytics }));
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND');
@@ -33,9 +35,34 @@ const ROW = {
   tier_level: 2,
   sub_status: 'active',
   sub_end: '2026-11-15T00:00:00Z',
+  questions: 32,
   attempted: 40,
   correct: 30,
   last_active_at: '2026-10-15T09:00:00Z',
+};
+
+const ANALYTICS = {
+  outcomes: {
+    answered: 30, right: 22, wrong: 8, firstTryRight: 18, skipped: 3, notReached: 12, inStartedLessons: 45,
+    submissions: 40, correctSubmissions: 27, hintsUsed: 4, medianTimeMs: 95_000,
+    wrongReasons: { wrongValue: 10, wrongUnit: 1, unparseable: 2, other: 0 },
+  },
+  topics: [
+    { student_id: 'x', topic_id: 't1', topic_name: 'Forces', attempted: 20, correct: 18, incorrect: 2, accuracy: 0.9, avg_time_ms: 1, hints_used: 0, unparseable: 0, mastered: true, first_practiced_at: '', last_practiced_at: '' },
+    { student_id: 'x', topic_id: 't2', topic_name: 'Moments', attempted: 20, correct: 9, incorrect: 11, accuracy: 0.45, avg_time_ms: 1, hints_used: 0, unparseable: 0, mastered: false, first_practiced_at: '', last_practiced_at: '' },
+  ],
+  difficulty: [{ level: 3, attempted: 10, correct: 4 }],
+  missed: [
+    { problem_id: 'p1', topic_id: 't2', problem_number: 7, topic_name: 'Moments', question: 'A beam of length 2 m…', wrong: 3, tries: 3, latest_correct: false, last_answer: '3.2 N', last_at: '2026-10-15T09:00:00Z' },
+  ],
+  usage: {
+    totalActiveMinutes: 600, activeMinutes7d: 90, activeMinutes30d: 300, activeDays: 12, activeDays30d: 8, logins30d: 9,
+    practiceSessions: 14, lessonsOpened: 20, simulationsStarted: 2, solutionsOpened: 1, downloads: 0, videoRequests: 1,
+    firstActivityAt: '2026-09-20T09:00:00Z',
+  },
+  weeklyAnswers: [{ week: '2026-10-12', correct: 15, incorrect: 5 }],
+  topicsMastered: 1,
+  bestStreak: 6,
 };
 
 afterEach(cleanup);
@@ -84,15 +111,12 @@ describe('/admin/students/[id]', () => {
     });
     mocks.getStudentStats.mockResolvedValue({
       weekly: [{ week: '2026-10-12', activeMinutes: 90, practiceMinutes: 60, attempts: 20 }],
-      lessonsVisited: 5,
-      topicsPracticed: 2,
-      topicsMastered: 1,
-      solutionsOpened: 0,
       chapters: [
         { chapter_id: 'a', label: 'Ch 3 Forces and Motion (0625)', attempted: 30, correct: 27, last_at: '' },
         { chapter_id: 'b', label: 'Ch 24 Earth and the Solar System (0625)', attempted: 10, correct: 3, last_at: '' },
       ],
     });
+    mocks.getStudentAnalytics.mockResolvedValue(ANALYTICS);
     mocks.getTimeline.mockResolvedValue({
       entries: [{ at: '2026-10-15T09:00:00Z', category: 'practice', title: 'Answered correctly · Q4', detail: 'Forces · “12 N”' }],
       hasMore: true,
@@ -103,6 +127,15 @@ describe('/admin/students/[id]', () => {
 
     expect(mocks.getTimeline).toHaveBeenCalledWith(ID, { from: null, to: null, categories: ['practice'], page: 2 });
     expect(screen.getByText('auto-approved')).toBeTruthy();
+    // Analytics
+    expect(screen.getByText('Skipped, not answered since'.toLowerCase())).toBeTruthy();
+    expect(screen.getByText('Still wrong')).toBeTruthy();
+    expect(screen.getByText('Last answer: 3.2 N')).toBeTruthy();
+    expect(screen.getByText('Wrong value')).toBeTruthy();
+    expect(screen.getByText('3 · Hard')).toBeTruthy();
+    expect(screen.getByText('Strongest lessons')).toBeTruthy();
+    expect(screen.getAllByText('Forces').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Moments').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Ch 3 Forces and Motion (0625)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Ch 24 Earth and the Solar System (0625)').length).toBeGreaterThan(0);
     expect(screen.getByText('Answered correctly · Q4')).toBeTruthy();

@@ -142,26 +142,6 @@ export interface ChapterAccuracy {
   correct: number;
 }
 
-/**
- * Strongest and weakest chapter by accuracy, among chapters with at least
- * MIN_CHAPTER_ATTEMPTS answers. Ties go to the chapter with more attempts.
- * With only one qualifying chapter there's no meaningful "weakest".
- */
-export function strongestAndWeakest(rows: ChapterAccuracy[]): {
-  strongest: ChapterAccuracy | null;
-  weakest: ChapterAccuracy | null;
-} {
-  const eligible = rows.filter((r) => r.attempted >= MIN_CHAPTER_ATTEMPTS);
-  if (eligible.length === 0) return { strongest: null, weakest: null };
-  const acc = (r: ChapterAccuracy) => r.correct / r.attempted;
-  const byBest = [...eligible].sort((a, b) => acc(b) - acc(a) || b.attempted - a.attempted);
-  const byWorst = [...eligible].sort((a, b) => acc(a) - acc(b) || b.attempted - a.attempted);
-  return {
-    strongest: byBest[0],
-    weakest: eligible.length > 1 ? byWorst[0] : null,
-  };
-}
-
 export function formatMinutes(minutes: number): string {
   if (minutes <= 0) return '0 min';
   if (minutes < 60) return `${Math.round(minutes)} min`;
@@ -172,4 +152,27 @@ export function formatMinutes(minutes: number): string {
 
 export function formatPercent(correct: number, attempted: number): string {
   return attempted > 0 ? `${Math.round((correct / attempted) * 100)}%` : '—';
+}
+
+/**
+ * Up to `k` strongest and weakest items by accuracy, among those with at
+ * least MIN_CHAPTER_ATTEMPTS answers. The two lists never overlap: with few
+ * eligible items they split the field (3 eligible → 1 strongest, 1 weakest),
+ * and a single eligible item is only listed as strongest.
+ */
+export function rankByAccuracy<T extends { attempted: number; correct: number }>(
+  rows: T[],
+  k = 3
+): { best: T[]; worst: T[] } {
+  const acc = (r: T) => r.correct / r.attempted;
+  const eligible = rows.filter((r) => r.attempted >= MIN_CHAPTER_ATTEMPTS);
+  if (eligible.length <= 1) return { best: eligible, worst: [] };
+  const take = Math.min(k, Math.floor(eligible.length / 2));
+  // Ties go to the item with more answers (more evidence) on both lists.
+  const best = [...eligible].sort((a, b) => acc(b) - acc(a) || b.attempted - a.attempted).slice(0, take);
+  const worst = [...eligible]
+    .filter((r) => !best.includes(r))
+    .sort((a, b) => acc(a) - acc(b) || b.attempted - a.attempted)
+    .slice(0, take);
+  return { best, worst };
 }

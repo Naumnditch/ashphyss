@@ -15,6 +15,8 @@ export const EVENT_TYPES = [
   'simulation_start',
   'simulation_complete',
   'practice_start',
+  // A question skipped in practice (metadata.problemId). Recorded from 2026-10-17.
+  'practice_skip',
   'download',
   'login',
   'logout',

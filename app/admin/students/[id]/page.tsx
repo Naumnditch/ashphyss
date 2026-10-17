@@ -1,6 +1,8 @@
 /**
- * /admin/students/[id] — one student's profile, subscription, payment
- * history, summary stats and a filterable, paginated activity timeline.
+ * /admin/students/[id] — one student's analytics (questions right / wrong /
+ * skipped, time on site, strengths and weak points, most-missed questions),
+ * profile, subscription, payment history and a filterable, paginated
+ * activity timeline.
  * Everything is fetched server-side (lib/admin/students.ts); admin-only via
  * app/admin/layout.tsx.
  */
@@ -8,7 +10,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  STATS_WEEKS,
   getPaymentHistory,
   getStudentProfile,
   getStudentStats,
@@ -16,18 +17,15 @@ import {
   type TimelineEntry,
 } from '@/lib/admin/students';
 import {
-  ACTIVE_GAP_MINUTES,
   ACTIVITY_CATEGORIES,
-  MIN_CHAPTER_ATTEMPTS,
-  formatMinutes,
-  formatPercent,
   parseTimelineFilters,
-  strongestAndWeakest,
   timelineQuery,
   type ActivityCategory,
 } from '@/lib/admin/studentHistory';
 import { LocalTime } from '@/components/admin/LocalTime';
 import { SubscriptionStatus, TierBadge, displayName } from '@/components/admin/StudentBits';
+import { StudentAnalyticsPanel } from '@/components/admin/StudentAnalyticsPanel';
+import { getStudentAnalytics } from '@/lib/admin/studentAnalytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,25 +45,15 @@ const CATEGORY_LABEL = Object.fromEntries(ACTIVITY_CATEGORIES.map((c) => [c.id, 
   string
 >;
 
-function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
+function Section({ id, title, children, aside }: { id?: string; title: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <section className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 mb-6">
+    <section id={id} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 mb-6 scroll-mt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{title}</h2>
         {aside}
       </div>
       {children}
     </section>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-gray-200 px-3.5 py-3 min-w-0">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="text-lg font-semibold text-gray-900 tabular-nums truncate">{value}</div>
-      {sub && <div className="text-xs text-gray-500 truncate">{sub}</div>}
-    </div>
   );
 }
 
@@ -100,17 +88,14 @@ export default async function AdminStudentDetailPage({
   if (!profile) notFound();
 
   const filters = parseTimelineFilters(searchParams);
-  const [payments, stats, timeline] = await Promise.all([
+  const [payments, stats, timeline, analytics] = await Promise.all([
     getPaymentHistory(profile.id),
     getStudentStats(profile.id),
     getTimeline(profile.id, filters),
+    getStudentAnalytics(profile.id),
   ]);
 
   const base = `/admin/students/${profile.id}`;
-  const { strongest, weakest } = strongestAndWeakest(stats.chapters);
-  const maxWeekMinutes = Math.max(1, ...stats.weekly.map((w) => w.activeMinutes));
-  const totalActive = stats.weekly.reduce((sum, w) => sum + w.activeMinutes, 0);
-  const activeWeeks = stats.weekly.filter((w) => w.activeMinutes > 0).length;
 
   return (
     <div>
@@ -121,7 +106,9 @@ export default async function AdminStudentDetailPage({
       {/* Profile */}
       <div className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 break-words">{displayName(profile)}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 break-words flex flex-wrap items-center gap-2">
+            {displayName(profile)} <TierBadge level={profile.tier_level} />
+          </h1>
           <p className="text-sm text-gray-500 break-all">{profile.email}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
@@ -137,7 +124,29 @@ export default async function AdminStudentDetailPage({
         </div>
       </div>
 
-      <Section title="Profile & subscription">
+      <nav aria-label="Sections" className="flex gap-1 overflow-x-auto -mx-1 px-1 mb-5 text-sm">
+        {[
+          ['#questions', 'Questions'],
+          ['#activity', 'Time & activity'],
+          ['#strengths', 'Strengths & weak points'],
+          ['#profile', 'Profile'],
+          ['#payments', 'Payments'],
+          ['#timeline', 'Timeline'],
+        ].map(([href, label]) => (
+          <a key={href} href={href} className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:text-gray-900">
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <StudentAnalyticsPanel
+        analytics={analytics}
+        stats={stats}
+        lastLoginAt={profile.last_login_at}
+        lastActiveAt={profile.last_active_at}
+      />
+
+      <Section id="profile" title="Profile & subscription">
         <dl className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
           <Field label="Current tier">
             <TierBadge level={profile.tier_level} />
@@ -171,111 +180,9 @@ export default async function AdminStudentDetailPage({
         </dl>
       </Section>
 
-      {/* Summary stats */}
-      <Section title="Summary">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          <Stat
-            label="Questions"
-            value={profile.attempted}
-            sub={`${formatPercent(profile.correct, profile.attempted)} correct`}
-          />
-          <Stat label="Topics covered" value={stats.topicsPracticed} sub={`${stats.lessonsVisited} lessons opened · ${stats.topicsMastered} mastered`} />
-          <Stat
-            label="Strongest chapter"
-            value={strongest ? formatPercent(strongest.correct, strongest.attempted) : '—'}
-            sub={strongest ? strongest.label : `needs ${MIN_CHAPTER_ATTEMPTS}+ answers in a chapter`}
-          />
-          <Stat
-            label="Weakest chapter"
-            value={weakest ? formatPercent(weakest.correct, weakest.attempted) : '—'}
-            sub={weakest ? weakest.label : 'needs two chapters with enough answers'}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-          <h3 className="text-sm font-medium text-gray-900">Time active per week</h3>
-          <span className="text-xs text-gray-500">
-            {formatMinutes(totalActive)} over the last {STATS_WEEKS} weeks · active in {activeWeeks}
-          </span>
-        </div>
-        <div className="flex items-end gap-1 h-28" role="img" aria-label="Estimated active minutes per week">
-          {stats.weekly.map((w) => (
-            <div key={w.week} className="flex-1 h-full flex flex-col justify-end min-w-0" title={`Week of ${w.week}: ${formatMinutes(w.activeMinutes)} active, ${w.attempts} answers`}>
-              <div
-                className="rounded-t"
-                style={{
-                  height: `${w.activeMinutes ? Math.max(4, (w.activeMinutes / maxWeekMinutes) * 100) : 0}%`,
-                  background: '#2a78d6',
-                }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-1 mt-1 text-[10px] text-gray-400">
-          {stats.weekly.map((w, i) => (
-            <div key={w.week} className="flex-1 text-center min-w-0 truncate">
-              {i % 3 === 0 || i === stats.weekly.length - 1 ? w.week.slice(5) : ''}
-            </div>
-          ))}
-        </div>
-        <details className="mt-2 text-xs text-gray-500">
-          <summary className="cursor-pointer select-none">Show as a table</summary>
-          <div className="overflow-x-auto mt-2">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-gray-400">
-                  <th className="py-1 pr-3 font-medium">Week of</th>
-                  <th className="py-1 pr-3 font-medium text-right">Active</th>
-                  <th className="py-1 pr-3 font-medium text-right">Answering</th>
-                  <th className="py-1 font-medium text-right">Answers</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.weekly.map((w) => (
-                  <tr key={w.week} className="border-t border-gray-100">
-                    <td className="py-1 pr-3">{w.week}</td>
-                    <td className="py-1 pr-3 text-right tabular-nums">{formatMinutes(w.activeMinutes)}</td>
-                    <td className="py-1 pr-3 text-right tabular-nums">{formatMinutes(w.practiceMinutes)}</td>
-                    <td className="py-1 text-right tabular-nums">{w.attempts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-        <p className="text-[11px] text-gray-400 mt-2">
-          Estimated from the gaps between recorded actions (pages, lessons, answers, solutions): a gap of up to{' '}
-          {ACTIVE_GAP_MINUTES} minutes counts as active, a longer one as a break. “Answering” is the time on questions as
-          timed by the practice page (capped at 30 minutes per answer).
-        </p>
-
-        {stats.chapters.length > 0 && (
-          <>
-            <h3 className="text-sm font-medium text-gray-900 mt-5 mb-2">Accuracy by chapter</h3>
-            <ul className="space-y-2">
-              {stats.chapters.map((c) => {
-                const pct = c.attempted ? (c.correct / c.attempted) * 100 : 0;
-                return (
-                  <li key={c.chapter_id} className="text-sm">
-                    <div className="flex justify-between gap-3">
-                      <span className="text-gray-700 truncate">{c.label}</span>
-                      <span className="text-gray-500 tabular-nums shrink-0">
-                        {formatPercent(c.correct, c.attempted)} · {c.correct}/{c.attempted}
-                      </span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: '#2a78d6' }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </Section>
-
       {/* Payments */}
       <Section
+        id="payments"
         title="Payment history"
         aside={
           <Link href="/admin/payment-requests" className="text-xs text-gray-500 underline">
@@ -361,7 +268,7 @@ export default async function AdminStudentDetailPage({
       </Section>
 
       {/* Timeline */}
-      <Section title="Activity timeline">
+      <Section id="timeline" title="Activity timeline">
         <form method="get" action={base} className="mb-4 space-y-3">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-3">
             <label className="text-xs text-gray-500">

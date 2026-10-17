@@ -54,8 +54,9 @@ export default async function AdminStudentsPage({
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Students</h1>
       <p className="text-gray-500 text-sm mb-6 max-w-2xl">
-        Every student account with their tier, subscription and practice record. Open a student for their payment
-        history and a full activity timeline.
+        Every student account with their tier, subscription and practice record. Click a student for their analytics:
+        questions right, wrong and skipped, time on the site, strengths and weak points, payments and a full activity
+        timeline.
       </p>
 
       <form method="get" className="flex flex-col sm:flex-row gap-3 mb-5">
@@ -118,7 +119,7 @@ export default async function AdminStudentsPage({
                           Active <LocalTime value={s.last_active_at} format="date" />
                         </span>
                         <span>
-                          {s.attempted} Qs · {formatPercent(s.correct, s.attempted)}
+                          {s.questions} Qs · {formatPercent(s.correct, s.attempted)}
                         </span>
                       </div>
                     </Link>
@@ -137,13 +138,18 @@ export default async function AdminStudentsPage({
                         <SortLink params={params} sort={c.sort} label={c.label} />
                       </th>
                     ))}
+                    <th className="pr-4" aria-hidden />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {rows.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
+                    // The name link stretches over the whole row (after:inset-0), so any cell opens the student.
+                    <tr key={s.id} className="relative hover:bg-gray-50 cursor-pointer">
                       <td className="px-4 py-3 max-w-[260px]">
-                        <Link href={`/admin/students/${s.id}`} className="font-medium text-gray-900 hover:underline block truncate">
+                        <Link
+                          href={`/admin/students/${s.id}`}
+                          className="font-medium text-gray-900 hover:underline block truncate after:absolute after:inset-0 after:content-['']"
+                        >
                           {displayName(s)}
                         </Link>
                         <div className="text-xs text-gray-400 truncate">
@@ -164,8 +170,11 @@ export default async function AdminStudentsPage({
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                         <LocalTime value={s.last_active_at} />
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{s.attempted}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{s.questions}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatPercent(s.correct, s.attempted)}</td>
+                      <td className="pr-4 py-3 text-right text-gray-300" aria-hidden>
+                        ›
+                      </td>
                     </tr>
                   ))}
                 </tbody>

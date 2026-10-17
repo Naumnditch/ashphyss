@@ -227,7 +227,16 @@ export function PracticeSession({ topicId, curriculumId }: { topicId: string; cu
     if (!current) return;
     const updated = { ...statuses };
     // Skipping a question already answered just moves on; it keeps its result.
-    if (updated[current.id] === 'untried') updated[current.id] = 'skipped';
+    if (updated[current.id] === 'untried') {
+      updated[current.id] = 'skipped';
+      // Lets admins see skips (localStorage alone never reaches the server).
+      trackEvent({
+        eventType: 'practice_skip',
+        entityType: 'topic',
+        entityId: topicId,
+        metadata: { problemId: current.id, ...(curriculumId ? { curriculum: curriculumId } : {}) },
+      });
+    }
     setStatuses(updated);
     writeSkipped(skipKey, updated);
     goTo(nextQuestionIndex(queue.map((q) => updated[q.id] ?? 'untried'), index));

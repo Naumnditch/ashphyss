@@ -41,6 +41,9 @@ export interface StudentListRow {
   tier_level: number;
   sub_status: string | null;
   sub_end: string | null;
+  /** Distinct questions answered. */
+  questions: number;
+  /** Answers submitted, retries included, and how many were right. */
   attempted: number;
   correct: number;
   last_active_at: string | null;
@@ -53,7 +56,7 @@ const SORT_SQL: Record<StudentSort, string> = {
   expiry: `sub_end`,
   joined: `joined_at`,
   active: `last_active_at`,
-  attempts: `attempted`,
+  attempts: `questions`,
   accuracy: `CASE WHEN attempted > 0 THEN correct::float / attempted END`,
 };
 
@@ -79,6 +82,7 @@ export async function listStudents(params: StudentListParams): Promise<{ rows: S
                    THEN COALESCE(p.tier_level, 0) ELSE 0 END AS tier_level,
               s.status::text AS sub_status,
               s.end_date AT TIME ZONE 'UTC' AS sub_end,
+              COALESCE(pa.questions, 0) AS questions,
               COALESCE(pa.attempted, 0) AS attempted,
               COALESCE(pa.correct, 0) AS correct,
               GREATEST(ss.last_seen, ae.last_event, pa.last_attempt) AS last_active_at
@@ -86,8 +90,8 @@ export async function listStudents(params: StudentListParams): Promise<{ rows: S
        LEFT JOIN subscriptions s ON s.student_id = u.id
        LEFT JOIN subscription_plans p ON p.id = s.plan_id
        LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS attempted, COUNT(*) FILTER (WHERE is_correct)::int AS correct,
-                MAX(created_at) AS last_attempt
+         SELECT COUNT(DISTINCT problem_id)::int AS questions, COUNT(*)::int AS attempted,
+                COUNT(*) FILTER (WHERE is_correct)::int AS correct, MAX(created_at) AS last_attempt
          FROM practice_attempts WHERE student_id = u.id
        ) pa ON true
        LEFT JOIN LATERAL (SELECT MAX(last_seen_at) AS last_seen FROM sessions WHERE user_id = u.id) ss ON true
@@ -125,6 +129,7 @@ export async function listStudents(params: StudentListParams): Promise<{ rows: S
       tier_level: Number(r.tier_level),
       sub_status: r.sub_status,
       sub_end: r.sub_end,
+      questions: Number(r.questions),
       attempted: Number(r.attempted),
       correct: Number(r.correct),
       last_active_at: r.last_active_at,
@@ -155,6 +160,7 @@ export async function getStudentProfile(id: string): Promise<StudentProfile | nu
             s.status::text AS sub_status, s.billing_cycle,
             s.start_date AT TIME ZONE 'UTC' AS sub_start,
             s.end_date AT TIME ZONE 'UTC' AS sub_end,
+            (SELECT COUNT(DISTINCT problem_id)::int FROM practice_attempts WHERE student_id = u.id) AS questions,
             (SELECT COUNT(*)::int FROM practice_attempts WHERE student_id = u.id) AS attempted,
             (SELECT COUNT(*)::int FROM practice_attempts WHERE student_id = u.id AND is_correct) AS correct,
             (SELECT COUNT(*)::int FROM sessions WHERE user_id = u.id AND revoked_at IS NULL
@@ -178,6 +184,7 @@ export async function getStudentProfile(id: string): Promise<StudentProfile | nu
     ...r,
     plan_tier: r.plan_tier === null ? null : Number(r.plan_tier),
     tier_level: Number(r.tier_level),
+    questions: Number(r.questions),
     attempted: Number(r.attempted),
     correct: Number(r.correct),
     active_devices: Number(r.active_devices),
@@ -393,6 +400,11 @@ function timelineSources(categories: ActivityCategory[], hasActivityEvents: bool
       `SELECT e.created_at, 'practice', 'Started practice', t.topic_name
        FROM analytics_events e LEFT JOIN topics t ON t.id = e.entity_id
        WHERE e.user_id = $1 AND e.event_type = 'practice_start'`,
+      `SELECT e.created_at, 'practice', 'Skipped a question' || COALESCE(' · Q' || pr.problem_number, ''), t.topic_name
+       FROM analytics_events e
+       LEFT JOIN topics t ON t.id = e.entity_id
+       LEFT JOIN problems pr ON pr.id::text = e.metadata->>'problemId'
+       WHERE e.user_id = $1 AND e.event_type = 'practice_skip'`,
       `SELECT a.created_at, 'practice',
               CASE WHEN a.is_correct THEN 'Answered correctly' ELSE 'Answered incorrectly' END
                 || COALESCE(' · Q' || pr.problem_number, ''),
@@ -508,17 +520,13 @@ export interface WeeklyActivity {
 
 export interface StudentStats {
   weekly: WeeklyActivity[];
-  lessonsVisited: number;
-  topicsPracticed: number;
-  topicsMastered: number;
-  solutionsOpened: number;
   chapters: (ChapterAccuracy & { last_at: string })[];
 }
 
 export const STATS_WEEKS = 12;
 
 export async function getStudentStats(studentId: string): Promise<StudentStats> {
-  const [weekly, coverage, chapters] = await Promise.all([
+  const [weekly, chapters] = await Promise.all([
     // Active time is estimated from the gaps between consecutive recorded
     // actions (events, answers, solution opens): a gap of up to
     // ACTIVE_GAP_MINUTES counts in full, a longer one is a break.
@@ -562,15 +570,6 @@ export async function getStudentStats(studentId: string): Promise<StudentStats> 
       [studentId, STATS_WEEKS, ACTIVE_GAP_MINUTES]
     ),
     query(
-      `SELECT
-         (SELECT COUNT(DISTINCT entity_id) FROM analytics_events
-            WHERE user_id = $1 AND event_type = 'lesson_view' AND entity_id IS NOT NULL)::int AS lessons_visited,
-         (SELECT COUNT(DISTINCT topic_id) FROM practice_attempts WHERE student_id = $1 AND topic_id IS NOT NULL)::int AS topics_practiced,
-         (SELECT COUNT(*) FROM topic_mastery WHERE student_id = $1 AND mastered)::int AS topics_mastered,
-         (SELECT COUNT(DISTINCT solution_id) FROM solution_access_log WHERE user_id = $1 AND action = 'view_full')::int AS solutions_opened`,
-      [studentId]
-    ),
-    query(
       `SELECT a.chapter_id,
               concat_ws(' ', 'Ch ' || ch.chapter_number, ch.title) || COALESCE(' (' || c.code || ')', '') AS label,
               COUNT(*)::int AS attempted,
@@ -586,7 +585,6 @@ export async function getStudentStats(studentId: string): Promise<StudentStats> 
     ),
   ]);
 
-  const c = coverage.rows[0] ?? {};
   return {
     weekly: weekly.rows.map((r) => ({
       week: r.week,
@@ -594,10 +592,6 @@ export async function getStudentStats(studentId: string): Promise<StudentStats> 
       practiceMinutes: Math.round(Number(r.practice_ms) / 60000),
       attempts: Number(r.attempts),
     })),
-    lessonsVisited: Number(c.lessons_visited ?? 0),
-    topicsPracticed: Number(c.topics_practiced ?? 0),
-    topicsMastered: Number(c.topics_mastered ?? 0),
-    solutionsOpened: Number(c.solutions_opened ?? 0),
     chapters: chapters.rows.map((r) => ({
       chapter_id: r.chapter_id,
       label: r.label,

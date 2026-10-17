@@ -131,3 +131,19 @@ body {
 .message-body h3 { font-size: 1.05em; font-weight: 600; margin: 0 0 0.4em; }
 .message-body hr { border: 0; border-top: 1px solid #e5e5e5; margin: 0.8em 0; }
 .rich-editor:empty::before { content: attr(data-placeholder); color: #a3a3a3; pointer-events: none; }
+
+/* Chart series colours (dataviz reference palette, slots 1–2), stepped for each surface. */
+:root {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+}
+:root[data-theme="dark"] {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+  }
+}

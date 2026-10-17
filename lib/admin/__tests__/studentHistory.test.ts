@@ -6,7 +6,7 @@ import {
   formatPercent,
   parseStudentListParams,
   parseTimelineFilters,
-  strongestAndWeakest,
+  rankByAccuracy,
   timelineQuery,
 } from '@/lib/admin/studentHistory';
 import { EVENT_TYPES } from '@/lib/analytics/track';
@@ -75,23 +75,31 @@ describe('parseStudentListParams', () => {
   });
 });
 
-describe('strongestAndWeakest', () => {
-  const ch = (id: string, attempted: number, correct: number) => ({ chapter_id: id, label: id, attempted, correct });
+describe('rankByAccuracy', () => {
+  const ch = (id: string, attempted: number, correct: number) => ({ id, attempted, correct });
+  const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
 
-  it('ignores chapters with too few answers', () => {
-    expect(strongestAndWeakest([ch('a', MIN_CHAPTER_ATTEMPTS - 1, 0)])).toEqual({ strongest: null, weakest: null });
+  it('ignores items with too few answers', () => {
+    expect(rankByAccuracy([ch('a', MIN_CHAPTER_ATTEMPTS - 1, 0)])).toEqual({ best: [], worst: [] });
   });
 
-  it('gives no weakest when only one chapter qualifies', () => {
-    const r = strongestAndWeakest([ch('a', 10, 5), ch('b', 2, 0)]);
-    expect(r.strongest?.chapter_id).toBe('a');
-    expect(r.weakest).toBeNull();
+  it('lists a single eligible item only as strongest', () => {
+    const r = rankByAccuracy([ch('a', 10, 5), ch('b', 2, 0)]);
+    expect(ids(r.best)).toEqual(['a']);
+    expect(r.worst).toEqual([]);
   });
 
-  it('picks by accuracy, breaking ties by volume', () => {
-    const r = strongestAndWeakest([ch('a', 10, 9), ch('b', 20, 18), ch('c', 10, 3), ch('d', 30, 9)]);
-    expect(r.strongest?.chapter_id).toBe('b');
-    expect(r.weakest?.chapter_id).toBe('d');
+  it('splits a small field without overlap', () => {
+    const r = rankByAccuracy([ch('a', 10, 9), ch('b', 10, 5), ch('c', 10, 1)]);
+    expect(ids(r.best)).toEqual(['a']);
+    expect(ids(r.worst)).toEqual(['c']);
+  });
+
+  it('takes up to k from each end, weakest first, ties broken by volume', () => {
+    const rows = [ch('a', 10, 9), ch('b', 20, 18), ch('c', 10, 3), ch('d', 30, 9), ch('e', 10, 7), ch('f', 10, 8), ch('g', 10, 6)];
+    const r = rankByAccuracy(rows, 3);
+    expect(ids(r.best)).toEqual(['b', 'a', 'f']);
+    expect(ids(r.worst)).toEqual(['d', 'c', 'g']);
   });
 });
 
