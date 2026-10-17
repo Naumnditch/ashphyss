@@ -14,6 +14,7 @@ import { nextRetryAt, SEND_LEASE_MIN } from './retryPolicy';
 import { checkEmail } from './validateEmail';
 import { fillPlaceholders, placeholderValues } from './placeholders';
 import { buildRecipientWhere, TIER_SQL, type RecipientFilters } from './filters';
+import { buildSubscriberSearch, SEARCH_MAX } from './subscriberSearch';
 import type {
   BulkSendDTO,
   DraftDTO,
@@ -39,8 +40,8 @@ function toSubscriber(r: any): SubscriberRow {
   const tier = Number(r.tier ?? 0);
   return {
     id: r.id,
-    firstName: r.first_name ?? '',
-    lastName: r.last_name ?? '',
+    firstName: (r.first_name ?? '').trim(),
+    lastName: (r.last_name ?? '').trim(),
     email: r.email,
     role: r.role,
     status: r.status,
@@ -70,17 +71,16 @@ export async function getSubscribers(ids: string[]): Promise<SubscriberRow[]> {
   return res.rows.map(toSubscriber);
 }
 
-export async function searchSubscribers(q: string, limit = 12): Promise<SubscriberDTO[]> {
-  const term = `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+export async function searchSubscribers(q: string, limit = SEARCH_MAX): Promise<{ subscribers: SubscriberDTO[]; total: number }> {
+  const { where, params } = buildSubscriberSearch(q);
   const res = await query(
-    `SELECT ${SUBSCRIBER_COLUMNS} FROM ${SUBSCRIBER_FROM}
-     WHERE u.role <> 'admin'
-       AND ($1 = '%%' OR (u.first_name || ' ' || u.last_name) ILIKE $1 OR u.email ILIKE $1)
-     ORDER BY u.first_name, u.last_name
-     LIMIT $2`,
-    [term, limit]
+    `SELECT ${SUBSCRIBER_COLUMNS}, count(*) OVER () AS total_count FROM ${SUBSCRIBER_FROM}
+     WHERE ${where}
+     ORDER BY lower(btrim(u.first_name)), lower(btrim(u.last_name)), u.email, u.id
+     LIMIT $${params.length + 1}`,
+    [...params, limit]
   );
-  return res.rows.map((r) => publicSubscriber(toSubscriber(r)));
+  return { subscribers: res.rows.map((r) => publicSubscriber(toSubscriber(r))), total: Number(res.rows[0]?.total_count ?? 0) };
 }
 
 export async function recipientsForFilters(filters: RecipientFilters): Promise<SubscriberRow[]> {

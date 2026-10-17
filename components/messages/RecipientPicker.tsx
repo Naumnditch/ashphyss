@@ -22,31 +22,39 @@ export function toRecipient(s: Pick<SubscriberDTO, 'id' | 'firstName' | 'lastNam
 export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipient[]; onChange: (r: Recipient[]) => void; max?: number }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SubscriberDTO[]>([]);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
 
+  // No page size: the server returns every match (up to SEARCH_MAX) so an
+  // empty search lists everyone. Each new search aborts the one before it,
+  // so a slow, older response can never replace a newer one.
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
+    const ctrl = new AbortController();
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const data = await api<{ subscribers: SubscriberDTO[] }>(`/api/subscribers/search?q=${encodeURIComponent(q)}&limit=10`);
-        if (!cancelled) {
-          setResults(data.subscribers);
-          setHighlight(0);
-        }
+        const data = await api<{ subscribers: SubscriberDTO[]; total?: number }>(`/api/subscribers/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
+        if (ctrl.signal.aborted) return;
+        setResults(data.subscribers);
+        setTotal(data.total ?? data.subscribers.length);
+        setHighlight(0);
+        if (list.current) list.current.scrollTop = 0;
       } catch {
-        if (!cancelled) setResults([]);
+        if (ctrl.signal.aborted) return;
+        setResults([]);
+        setTotal(0);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!ctrl.signal.aborted) setLoading(false);
       }
     }, 180);
     return () => {
-      cancelled = true;
+      ctrl.abort();
       clearTimeout(t);
     };
   }, [q, open]);
@@ -59,6 +67,13 @@ export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipie
 
   const chosen = new Set(value.map((r) => r.id));
   const options = results.filter((r) => !chosen.has(r.id));
+  const active = Math.min(highlight, options.length - 1);
+  const more = total - results.length;
+
+  // Keep the keyboard-highlighted row in view inside the scrolling list.
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
 
   const add = (s: SubscriberDTO) => {
     if (value.length >= max) return;
@@ -107,9 +122,9 @@ export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipie
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               setHighlight((h) => Math.max(h - 1, 0));
-            } else if (e.key === 'Enter' && options[highlight]) {
+            } else if (e.key === 'Enter' && options[active]) {
               e.preventDefault();
-              add(options[highlight]);
+              add(options[active]);
             } else if (e.key === 'Backspace' && !q && value.length) {
               onChange(value.slice(0, -1));
             } else if (e.key === 'Escape') setOpen(false);
@@ -123,7 +138,7 @@ export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipie
         />
       </div>
       {open && (
-        <div role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+        <div ref={list} role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
           {loading && !options.length ? (
             <p className="px-3 py-2 text-sm text-gray-500">Searching…</p>
           ) : options.length === 0 ? (
@@ -134,10 +149,11 @@ export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipie
                 key={s.id}
                 type="button"
                 role="option"
-                aria-selected={i === highlight}
+                data-index={i}
+                aria-selected={i === active}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => add(s)}
-                className={`flex w-full items-center gap-3 px-3 py-2 text-left ${i === highlight ? 'bg-gray-50' : ''}`}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left ${i === active ? 'bg-gray-50' : ''}`}
               >
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">{initials(s.firstName, s.lastName, s.email)}</span>
                 <span className="min-w-0 flex-1">
@@ -153,6 +169,11 @@ export function RecipientPicker({ value, onChange, max = 100 }: { value: Recipie
                 <TierBadge tier={s.tierName} />
               </button>
             ))
+          )}
+          {more > 0 && options.length > 0 && (
+            <p className="border-t border-gray-100 px-3 py-2 text-xs text-gray-500">
+              {more} more {more === 1 ? 'person matches' : 'people match'}. Keep typing to narrow it down.
+            </p>
           )}
         </div>
       )}
