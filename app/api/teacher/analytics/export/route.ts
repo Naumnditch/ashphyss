@@ -17,7 +17,6 @@ import {
   getWrongAttempts,
 } from '@/lib/practice/analytics';
 import { toCsv, percent, seconds } from '@/lib/practice/csv';
-import { latexToGradable } from '@/lib/math/latexToGradable';
 
 function csvResponse(body: string, filename: string) {
   return new NextResponse(body, {
@@ -114,8 +113,7 @@ export async function GET(req: NextRequest) {
         { header: 'When', value: (r) => r.created_at },
         { header: 'Topic', value: (r) => r.topic_name },
         { header: 'Question', value: (r) => r.problem_number },
-        // Answers from the maths box are LaTeX; the sheet gets the linear form (3*10^8, (1)/(2)).
-        { header: 'Their answer', value: (r) => (r.raw_answer ? latexToGradable(r.raw_answer) : r.raw_answer) },
+        { header: 'Their answer', value: (r) => r.raw_answer },
         { header: 'Read as', value: (r) => r.normalized_answer },
         { header: 'Expected', value: (r) => [r.answer_correct, r.answer_unit].filter(Boolean).join(' ') },
         { header: 'Reason', value: (r) => r.grade_reason },

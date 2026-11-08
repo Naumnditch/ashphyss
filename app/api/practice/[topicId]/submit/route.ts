@@ -2,12 +2,6 @@
  * POST /api/practice/[topicId]/submit
  * Body: { problemId, submittedAnswer, timeSpentMs?, hintUsed? }
  *
- * submittedAnswer is an option id (MCQ), or what the maths answer box holds:
- * the raw LaTeX ("3\times10^{8}") or, from older clients, plain text. It is
- * validated (length, characters, LaTeX commands) and only ever parsed —
- * never evaluated — and the raw string is what gets stored, so the answer
- * can be shown again exactly as the student wrote it.
- *
  * Grades the answer, appends it to practice_attempts (the source of truth)
  * and returns the mastery state derived from that log — IXL-style, a run of
  * MASTERY_STREAK correct answers marks the topic mastered and a wrong answer
@@ -22,8 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getUserTier } from '@/lib/subscriptions/getUserTier';
 import { query } from '@/lib/db/client';
-import { gradeSubmission } from '@/lib/grading/gradeSubmission';
-import { validateAnswer } from '@/lib/math/answerValidation';
+import { gradeNumeric, specFromProblem, type GradeReason } from '@/lib/grading/numericAnswer';
 import { openPracticeSession, recordAttempt } from '@/lib/practice/attempts';
 import { explanationForStudents } from '@/lib/explanations/display';
 
@@ -42,21 +35,10 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
     return NextResponse.json({ success: false, error: 'This lesson requires a higher plan' }, { status: 403 });
   }
 
-  let body: { problemId?: unknown; submittedAnswer?: unknown; timeSpentMs?: unknown; hintUsed?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
-  }
-  const { problemId, timeSpentMs, hintUsed } = body;
-  if (!problemId || typeof problemId !== 'string') {
+  const { problemId, submittedAnswer, timeSpentMs, hintUsed } = await req.json();
+  if (!problemId || submittedAnswer === undefined || submittedAnswer === null) {
     return NextResponse.json({ success: false, error: 'Missing answer' }, { status: 400 });
   }
-  const checked = validateAnswer(body.submittedAnswer);
-  if (!checked.ok) {
-    return NextResponse.json({ success: false, error: checked.error }, { status: 400 });
-  }
-  const submittedAnswer = checked.answer;
 
   const problemResult = await query(
     `SELECT id, answer_type, answer_correct, explanation, explanation_structured, explanation_structured_status, chapter_id,
@@ -69,16 +51,48 @@ export async function POST(req: NextRequest, { params }: { params: { topicId: st
   }
   const problem = problemResult.rows[0];
 
-  let correctOption: { id: string; option_text: string } | null = null;
+  let isCorrect = false;
+  let correctAnswerLabel = problem.answer_correct;
+  let gradingMethod: 'mcq' | 'numeric' | 'text' = 'text';
+  let gradeReason: GradeReason | null = null;
+  let toleranceUsed: number | null = null;
+  let normalizedAnswer: string | null = null;
+  let feedback: string | null = null;
+
   if (problem.answer_type === 'multiple_choice') {
-    const optionResult = await query(
+    gradingMethod = 'mcq';
+    const correctOption = await query(
       `SELECT id, option_text FROM problem_options WHERE problem_id = $1 AND is_correct = TRUE LIMIT 1`,
       [problemId]
     );
-    correctOption = optionResult.rows[0] ?? null;
+    if (correctOption.rows.length > 0) {
+      isCorrect = String(submittedAnswer) === String(correctOption.rows[0].id);
+      correctAnswerLabel = correctOption.rows[0].option_text;
+      gradeReason = isCorrect ? 'match' : 'wrong-value';
+      normalizedAnswer = correctAnswerLabel;
+    }
+  } else if (problem.answer_type === 'numeric') {
+    const spec = specFromProblem(problem);
+    if (spec) {
+      gradingMethod = 'numeric';
+      toleranceUsed = spec.tolerance ?? 0.02;
+      const result = gradeNumeric(String(submittedAnswer), spec);
+      isCorrect = result.correct;
+      gradeReason = result.reason;
+      feedback = result.feedback;
+      normalizedAnswer = result.parsedValue === null ? null : String(result.parsedValue);
+      if (problem.answer_unit) correctAnswerLabel = `${problem.answer_correct} ${problem.answer_unit}`;
+    } else {
+      // The stored answer isn't a number — fall back to text comparison
+      // rather than marking every submission wrong.
+      isCorrect = String(submittedAnswer).trim().toLowerCase() === String(problem.answer_correct ?? '').trim().toLowerCase();
+      gradeReason = isCorrect ? 'match' : 'wrong-value';
+    }
+  } else {
+    isCorrect = String(submittedAnswer).trim().toLowerCase() === String(problem.answer_correct).trim().toLowerCase();
+    gradeReason = isCorrect ? 'match' : 'wrong-value';
+    normalizedAnswer = String(submittedAnswer).trim().toLowerCase();
   }
-  const { isCorrect, correctAnswerLabel, gradingMethod, gradeReason, toleranceUsed, normalizedAnswer, feedback } =
-    gradeSubmission(problem, submittedAnswer, correctOption);
 
   // problem_submissions is kept in step with practice_attempts because the
   // admin analytics dashboard still reads it.

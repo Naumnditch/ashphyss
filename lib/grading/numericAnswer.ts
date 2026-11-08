@@ -25,9 +25,6 @@
  * preserved and only the numeric portion is matched case-insensitively.
  */
 
-import { latexToGradable, looksLikeLatex } from '../math/latexToGradable';
-import { evaluatePrefix } from '../math/safeEvaluate';
-
 export interface NumericAnswerSpec {
   /** Expected value, expressed in the base unit (N, C, m, J, V, kg, s...). */
   value: number;
@@ -139,26 +136,11 @@ function stripThousandsSeparators(input: string): string {
   return out;
 }
 
-/** Arabic-Indic digits (٠-٩ and the Persian ۰-۹) and the Arabic decimal point ٫ → ASCII. */
-function foldArabicDigits(input: string): string {
-  return input
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/٫/g, '.');
-}
-
 function normalize(raw: string): string {
   let s = String(raw ?? '');
-  // An answer from the maths keyboard arrives as LaTeX (3\times10^{8},
-  // \frac{1}{2}); read it in its plain linear form (3*10^8, (1)/(2)).
-  // Plain-text answers skip this and are untouched.
-  if (looksLikeLatex(s)) s = latexToGradable(s);
-  s = foldArabicDigits(s);
   s = foldSuperscripts(s);
   s = stripLatex(s);
   s = foldUnicode(s);
-  // Python/calculator-style powers: 3*10**8 means 3*10^8.
-  s = s.replace(/\*\*/g, '^');
   s = s.replace(/\s+/g, ' ').trim();
   s = stripThousandsSeparators(s);
   return s;
@@ -336,30 +318,15 @@ export function parseQuantity(raw: string): ParsedQuantity | null {
     [PLAIN, (m) => decimalValue(m[1], null)],
   ];
 
-  let consumed = 0;
   for (const [pattern, toValue] of attempts) {
     const match = normalized.match(pattern);
     if (match) {
       const value = toValue(match);
       if (!Number.isFinite(value)) continue;
       mantissa = value;
-      consumed = match[0].length;
-      rest = normalized.slice(consumed).trim();
+      rest = normalized.slice(match[0].length).trim();
       break;
     }
-  }
-
-  // Fractions, roots, brackets and pi: (1)/(2), sqrt(2), 2pi, 1.5*2. The
-  // expression reader is used only when it reads further than the plain
-  // patterns above, so every answer those patterns already handled
-  // (3.0e8, 3.0 x 10^8, 3.0*10^8, 225 mN) is read exactly as before.
-  const expression = evaluatePrefix(normalized);
-  // A half-typed expression ("1.8 x 10^") leaves an operator behind; then the
-  // plain reading stands.
-  const leftover = expression ? normalized.slice(expression.length).trimStart() : '';
-  if (expression && expression.operations > 0 && expression.length > consumed && !/^[\^*/+\-]/.test(leftover)) {
-    mantissa = expression.value;
-    rest = normalized.slice(expression.length).trim();
   }
 
   if (mantissa === null) return null;

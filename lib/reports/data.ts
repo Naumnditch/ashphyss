@@ -36,7 +36,6 @@ import {
   trendOf,
 } from '@/lib/reports/insights';
 import type { ReportChapter, ReportLesson, ReviseQuestion, StudentReport } from '@/lib/reports/types';
-import { latexToGradable } from '@/lib/math/latexToGradable';
 
 export const REPORT_TIMEZONE = 'Europe/Istanbul';
 const n = (v: unknown) => Number(v ?? 0);
@@ -221,8 +220,7 @@ export async function getStudentReport(studentId: string): Promise<StudentReport
       question: m.question,
       wrongTries: m.wrong,
       stillWrong: !m.latest_correct,
-      // Maths-box answers are LaTeX; the report (and its PDF) shows the linear form.
-      lastAnswer: m.last_answer ? latexToGradable(m.last_answer) : m.last_answer,
+      lastAnswer: m.last_answer,
       href: m.topic_id ? (l?.practiceHref ?? `/practice/${m.topic_id}`) : null,
     };
   });

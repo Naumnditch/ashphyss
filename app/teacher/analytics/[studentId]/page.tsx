@@ -18,7 +18,6 @@ import {
   getWrongAttempts,
 } from '@/lib/practice/analytics';
 import { AccuracyOverTime, TopicAccuracy } from '@/components/teacher/PracticeCharts';
-import { AnswerDisplay } from '@/components/math/MathDisplay';
 
 export const dynamic = 'force-dynamic';
 
@@ -172,7 +171,7 @@ export default async function StudentAnalyticsPage({ params }: { params: { stude
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2.5 text-xs text-gray-600">
                   <span>
-                    Typed <span className="font-semibold text-gray-900">{attempt.raw_answer ? <AnswerDisplay answer={attempt.raw_answer} /> : '(blank)'}</span>
+                    Typed <span className="font-semibold text-gray-900">{attempt.raw_answer || '(blank)'}</span>
                   </span>
                   {attempt.grading_method === 'numeric' && attempt.normalized_answer && (
                     <span>

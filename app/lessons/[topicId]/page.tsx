@@ -19,8 +19,7 @@ import { ChapterViewTracker } from '@/components/analytics/ChapterViewTracker';
 import { ActivityTracker } from '@/components/analytics/ActivityTracker';
 import { YouTubeEmbed } from '@/components/video/YouTubeEmbed';
 import { getPublishedLessonVideos, type LessonVideo } from '@/lib/videos/lessonVideos';
-import { cheatSheetFor, cheatSheetHref } from '@/lib/cheatsheets';
-import { ComingSoonCard, ResourceCard, ResourceCta, ResourceSecondaryLink } from '@/components/lesson/ResourceCard';
+import { cheatSheetFor, cheatSheetHref, syllabusReference } from '@/lib/cheatsheets';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,22 +71,16 @@ export default async function LessonPage({
     return [];
   });
 
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const sims = lesson.simulations;
-
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       <ChapterViewTracker topicIds={[lesson.id]} />
       {user && <ActivityTracker type="lesson_view" lessonId={lesson.id} />}
-      <Link
-        href={`/curriculum?c=${curriculumId}`}
-        className="inline-block rounded text-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-h-5a67d8 focus-visible:ring-offset-2"
-      >
+      <Link href={`/curriculum?c=${curriculumId}`} className="text-sm text-blue-600 hover:underline mb-6 inline-block">
         ← {curriculum.displayName} curriculum
       </Link>
 
       {requested && requested !== curriculumId && (
-        <div className="mt-4 max-w-3xl text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3">
+        <div className="mb-6 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3">
           This lesson isn&rsquo;t part of {CURRICULA[requested].name}, so it&rsquo;s shown as {curriculum.name}.{' '}
           <Link href={`/curriculum?c=${requested}`} className="font-semibold underline">
             Browse {CURRICULA[requested].shortName} lessons
@@ -95,28 +88,28 @@ export default async function LessonPage({
         </div>
       )}
 
-      <header className="mt-4 max-w-3xl">
-        <p className="text-sm italic text-gray-500">
+      <header className="mb-8">
+        <p className="text-sm italic text-gray-500 mb-1">
           {syllabusRefLabel(curriculumId, topicCode)}
           {found && topicCode !== 'Maths' && <> · {found.unit.title}</>}
         </p>
-        <h1 className="mt-1.5 text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-3">
           {curriculumId !== 'igcse' && topicCode && topicCode !== 'Maths' && (
             <span className="font-mono text-base font-semibold text-h-5a67d8 bg-h-eef0fd px-2 py-0.5 rounded">{topicCode}</span>
           )}
-          <span className="min-w-0 break-words">{title}</span>
+          {title}
         </h1>
         {found && topicCode !== 'Maths' && found.section.title !== title && (
-          <p className="text-gray-600 mt-1.5">Syllabus section: {found.section.title}</p>
+          <p className="text-gray-600 mt-2">Syllabus section: {found.section.title}</p>
         )}
-        {lesson.description && <p className="mt-3 text-gray-700">{lesson.description}</p>}
+        {lesson.description && <p className="mt-4 text-gray-700">{lesson.description}</p>}
         {lesson.syllabus_reference && (
-          <p className="mt-3 text-gray-700 bg-gray-50 border-l-[3px] border-h-667eea px-4 py-2 rounded-r">
+          <p className="mt-4 text-gray-700 bg-gray-50 border-l-[3px] border-h-667eea px-4 py-2 rounded-r">
             {lesson.syllabus_reference}
           </p>
         )}
         {alsoIn.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-gray-500">Also in:</span>
             {alsoIn.map((c) => {
               const code = topicCodeFor(lesson, c);
@@ -134,7 +127,7 @@ export default async function LessonPage({
           </div>
         )}
         {locked && (
-          <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+          <p className="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
             🔒 This lesson is part of the <strong>{tierName(lesson.required_tier)}</strong> plan.{' '}
             <Link href="/pricing" className="underline font-semibold">
               See plans
@@ -143,105 +136,122 @@ export default async function LessonPage({
         )}
       </header>
 
-      {/* The four resources, always in this order. A card with no content
-          yet (no sheet, an empty list, no questions) shows "Coming soon". */}
-      <section aria-label="Lesson resources" className="mt-6 sm:mt-8">
-        <ul role="list" className="grid grid-cols-1 gap-4 sm:auto-rows-fr sm:grid-cols-2 xl:grid-cols-4 lg:gap-6">
-          <li className="min-w-0">
-            {sheet ? (
-              <ResourceCard
-                kind="sheet"
-                label="Revision cheat sheet"
-                title={sheet.title}
-                description={sheet.goal}
-                status={{ text: 'Printable' }}
-              >
-                <ResourceCta href={cheatSheetHref(sheet)}>Open sheet →</ResourceCta>
-              </ResourceCard>
-            ) : (
-              <ComingSoonCard kind="sheet" label="Revision cheat sheet" />
-            )}
-          </li>
+      <section className="mb-8" aria-labelledby="cheat-sheet">
+        <h2 id="cheat-sheet" className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3 border-b pb-2">
+          Revision cheat sheet
+        </h2>
+        {sheet ? (
+          <Link
+            href={cheatSheetHref(sheet)}
+            className="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-lg px-4 py-3 bg-white hover:border-blue-400 hover:shadow-sm"
+          >
+            <span className="min-w-0">
+              <span className="block font-medium text-gray-900">{sheet.title}: printable summary</span>
+              <span className="block text-xs text-gray-500 font-mono">
+                {syllabusReference(sheet)} · definitions, equations, diagrams, worked example, quick recall
+              </span>
+            </span>
+            <span className="text-sm font-semibold text-blue-600 whitespace-nowrap">Open sheet →</span>
+          </Link>
+        ) : (
+          <p className="text-sm text-gray-500">There&rsquo;s no {curriculum.shortName} cheat sheet for this lesson yet.</p>
+        )}
+      </section>
 
-          <li className="min-w-0">
-            {videos.length === 0 ? (
-              <ComingSoonCard kind="video" label="Video lessons" />
-            ) : canWatchVideos ? (
-              <ResourceCard
-                kind="video"
-                label="Video lessons"
-                title={videos.length === 1 ? videos[0].title : plural(videos.length, 'video lesson')}
-                description={videos.length === 1 ? videos[0].description : videos.map((v) => v.title).join(' · ')}
-                status={{ text: plural(videos.length, 'video') }}
-              >
-                <ResourceCta href="#video-lessons">Watch {videos.length === 1 ? 'video' : 'videos'} ↓</ResourceCta>
-              </ResourceCard>
-            ) : (
-              // Locked: titles only. The video ids are never rendered, so they
-              // never reach a Free-tier browser.
-              <ResourceCard
-                kind="video"
-                label="Video lessons"
-                title={plural(videos.length, 'video lesson')}
-                description={videos.map((v) => v.title).join(' · ')}
-                status={{ text: 'Plus & Pro', tone: 'locked' }}
-              >
-                <ResourceCta href="/pricing" variant="locked">
-                  See Plus &amp; Pro plans
-                </ResourceCta>
-                {!user && <ResourceSecondaryLink href="/auth/login">Log in</ResourceSecondaryLink>}
-              </ResourceCard>
-            )}
-          </li>
+      <section className="mb-8" aria-labelledby="video-lessons">
+        <h2 id="video-lessons" className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3 border-b pb-2">
+          Video lessons
+        </h2>
+        {videos.length === 0 ? (
+          <p className="text-sm text-gray-500">There are no video lessons for this lesson yet.</p>
+        ) : canWatchVideos ? (
+          <ol className="space-y-6">
+            {videos.map((v) => (
+              <li key={v.id}>
+                <h3 className="font-semibold text-gray-900 mb-1">{v.title}</h3>
+                {v.description && <p className="text-sm text-gray-600 mb-2">{v.description}</p>}
+                <YouTubeEmbed youtubeId={v.youtubeId} title={v.title} trackView={user ? { lessonId: lesson.id } : undefined} />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          // Locked: titles only. The video ids are never rendered, so they
+          // never reach a Free-tier browser.
+          <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-4">
+            <p className="text-sm text-amber-900 font-semibold mb-2">
+              🔒 {videos.length} video lesson{videos.length === 1 ? '' : 's'} for this lesson — Plus &amp; Pro
+            </p>
+            <ul className="text-sm text-amber-900/80 list-disc list-inside mb-3 space-y-0.5">
+              {videos.map((v) => (
+                <li key={v.id}>{v.title}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/pricing" className="text-sm font-semibold text-on-ink bg-gray-900 hover:bg-black px-4 py-2 rounded-full">
+                See Plus &amp; Pro plans
+              </Link>
+              {!user && (
+                <Link href="/auth/login" className="text-sm font-semibold text-gray-800 border border-gray-300 hover:bg-white px-4 py-2 rounded-full">
+                  Log in
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
 
-          <li className="min-w-0">
-            {sims.length === 0 ? (
-              <ComingSoonCard kind="simulation" label="Interactive simulation" />
-            ) : sims.length === 1 ? (
-              <ResourceCard
-                kind="simulation"
-                label="Interactive simulation"
-                title={sims[0].title}
-                description="The same in every curriculum: the physics doesn’t change with the syllabus."
-                status={{ text: 'Interactive' }}
-              >
-                <ResourceCta href={sims[0].urlPath}>Open simulation →</ResourceCta>
-              </ResourceCard>
-            ) : (
-              <ResourceCard
-                kind="simulation"
-                label="Interactive simulation"
-                title={plural(sims.length, 'simulation')}
-                description={sims.map((sim) => sim.title).join(' · ')}
-                status={{ text: 'Interactive' }}
-              >
-                <ResourceCta href="#simulations">Choose a simulation ↓</ResourceCta>
-              </ResourceCard>
-            )}
-          </li>
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3 border-b pb-2">
+          Interactive simulation
+        </h2>
+        {lesson.simulations.length > 0 ? (
+          <>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {lesson.simulations.map((sim) => (
+                <li key={sim.id}>
+                  <Link
+                    href={sim.urlPath}
+                    className="flex items-center gap-3 border border-gray-200 rounded-lg px-4 py-3 bg-white hover:border-blue-400 hover:shadow-sm"
+                  >
+                    <SimulationIcon className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                    <span className="font-medium text-gray-900">{sim.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-gray-500 mt-2">
+              Simulations are the same in every curriculum — the physics doesn&rsquo;t change with the syllabus.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-gray-500">There&rsquo;s no simulation for this lesson yet.</p>
+        )}
+      </section>
 
-          <li className="min-w-0">
-            {questionCount > 0 ? (
-              <ResourceCard
-                kind="practice"
-                label="Practice questions"
-                title={plural(questionCount, 'question')}
-                description="Get 5 right in a row to master the lesson."
-                status={{ text: curriculum.shortName }}
-                primary
-              >
-                <ResourceCta href={practiceHref(curriculumId)} variant="primary">
-                  Start practice →
-                </ResourceCta>
-              </ResourceCard>
-            ) : (
-              <ComingSoonCard kind="practice" label="Practice questions" />
-            )}
-          </li>
-        </ul>
-
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3 border-b pb-2">
+          Practice questions – {curriculum.displayName}
+        </h2>
+        {questionCount > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <p className="text-sm text-gray-700">
+              <strong>{questionCount}</strong> {curriculum.shortName} question{questionCount === 1 ? '' : 's'}, written for
+              this syllabus. Get 5 right in a row to master the lesson.
+            </p>
+            <Link
+              href={practiceHref(curriculumId)}
+              className="text-sm font-semibold text-white bg-green-600 hover:bg-green-700 px-4 py-2 rounded-full whitespace-nowrap"
+            >
+              🎯 Start practice
+            </Link>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+            There are no {curriculum.shortName} practice questions for this lesson yet.
+          </p>
+        )}
         {otherBanks.length > 0 && (
-          <p className="text-xs text-gray-500 mt-4 xl:text-right">
+          <p className="text-xs text-gray-500 mt-3">
             Also available:{' '}
             {otherBanks.map(([id, n], i) => (
               <span key={id}>
@@ -255,62 +265,7 @@ export default async function LessonPage({
         )}
       </section>
 
-      {/* Full-width detail the cards point to: the players need room. */}
-      {videos.length > 0 && (
-        <section id="video-lessons" aria-labelledby="video-lessons-heading" className="mt-10 scroll-mt-24">
-          <h2 id="video-lessons-heading" className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-4 border-b pb-2">
-            Watch the video lessons
-          </h2>
-          {canWatchVideos ? (
-            <ol className="grid gap-6 lg:grid-cols-2">
-              {videos.map((v) => (
-                <li key={v.id} className="min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1 break-words">{v.title}</h3>
-                  {v.description && <p className="text-sm text-gray-600 mb-2">{v.description}</p>}
-                  <YouTubeEmbed youtubeId={v.youtubeId} title={v.title} trackView={user ? { lessonId: lesson.id } : undefined} />
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <div className="max-w-3xl border border-amber-200 bg-amber-50 rounded-lg px-4 py-4">
-              <p className="text-sm text-amber-900 font-semibold mb-2">
-                🔒 {plural(videos.length, 'video lesson')} for this lesson — Plus &amp; Pro
-              </p>
-              <ul className="text-sm text-amber-900/80 list-disc list-inside space-y-0.5">
-                {videos.map((v) => (
-                  <li key={v.id}>{v.title}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      )}
-
-      {sims.length > 1 && (
-        <section id="simulations" aria-labelledby="simulations-heading" className="mt-10 scroll-mt-24">
-          <h2 id="simulations-heading" className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-4 border-b pb-2">
-            Choose a simulation
-          </h2>
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {sims.map((sim) => (
-              <li key={sim.id} className="min-w-0">
-                <Link
-                  href={sim.urlPath}
-                  className="flex items-center gap-3 border border-gray-200 rounded-lg px-4 py-3 bg-white hover:border-blue-400 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-h-5a67d8 focus-visible:ring-offset-2"
-                >
-                  <SimulationIcon className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                  <span className="font-medium text-gray-900 break-words">{sim.title}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-gray-500 mt-2">
-            Simulations are the same in every curriculum — the physics doesn&rsquo;t change with the syllabus.
-          </p>
-        </section>
-      )}
-
-      <p className="mt-10 text-xs text-gray-400 border-t pt-4">
+      <p className="text-xs text-gray-400 border-t pt-4">
         Filed under{' '}
         <Link href={`/curriculum/${lesson.chapter_id}?c=${curriculumId}`} className="hover:underline">
           {chapterLabel(lesson.course_code, lesson.chapter_number)} · {lesson.chapter_title}

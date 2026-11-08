@@ -130,8 +130,7 @@ describe('/admin/students/[id]', () => {
     // Analytics
     expect(screen.getByText('Skipped, not answered since'.toLowerCase())).toBeTruthy();
     expect(screen.getByText('Still wrong')).toBeTruthy();
-    // The answer itself is its own element now (typeset when it is maths-box LaTeX).
-    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === 'Last answer: 3.2 N')).toBeTruthy();
+    expect(screen.getByText('Last answer: 3.2 N')).toBeTruthy();
     expect(screen.getByText('Wrong value')).toBeTruthy();
     expect(screen.getByText('3 · Hard')).toBeTruthy();
     expect(screen.getByText('Strongest lessons')).toBeTruthy();

@@ -1,9 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import MathAnswerInput from '@/components/math/MathAnswerInput';
-import { AnswerDisplay } from '@/components/math/MathDisplay';
-import { parseQuantity } from '@/lib/grading/numericAnswer';
 import {
   type Vec2,
   add,
@@ -23,11 +20,6 @@ import {
   clamp,
   snapToGrid,
 } from '@/lib/vectors';
-
-/** Reads a typed answer (plain or LaTeX from the maths box: 1.2\times10^{3}, \frac{3}{4}); NaN if there is no number. */
-function readAnswer(answer: string): number {
-  return parseQuantity(answer)?.value ?? NaN;
-}
 
 /**
  * Vector Addition sandbox — six modes across one tab bar, all sharing the
@@ -1280,8 +1272,8 @@ function Mode5ScaleDrawing() {
   };
 
   const checkAnswer = () => {
-    const mag = readAnswer(magAnswer);
-    const ang = readAnswer(angleAnswer);
+    const mag = parseFloat(magAnswer);
+    const ang = parseFloat(angleAnswer);
     if (isNaN(mag) || isNaN(ang)) return;
     const magOk = Math.abs(mag - trueRPolar.r) / trueRPolar.r <= 0.02;
     const angleOk = Math.abs(angleDiff(ang, trueRPolar.theta)) <= 2;
@@ -1358,14 +1350,14 @@ function Mode5ScaleDrawing() {
       <div className={cardCls + ' p-4'}>
         <span className={labelCls}>Your answer for the resultant R</span>
         <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1">
             <span className="text-[11px] font-mono text-h-4a5a72">|R| ({scenario.unit})</span>
-            <MathAnswerInput compact className="w-36" value={magAnswer} onChange={setMagAnswer} onSubmit={checkAnswer} placeholder="|R|" aria-label={`Magnitude of R in ${scenario.unit}`} />
-          </div>
-          <div className="flex flex-col gap-1">
+            <input type="number" value={magAnswer} onChange={(e) => setMagAnswer(e.target.value)} className="w-28 border border-gray-300 rounded px-2 py-1 text-[13px] font-mono" />
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="text-[11px] font-mono text-h-4a5a72">θ (° from +x)</span>
-            <MathAnswerInput compact className="w-36" value={angleAnswer} onChange={setAngleAnswer} onSubmit={checkAnswer} placeholder="θ" aria-label="Angle of R in degrees from the positive x axis" />
-          </div>
+            <input type="number" value={angleAnswer} onChange={(e) => setAngleAnswer(e.target.value)} className="w-28 border border-gray-300 rounded px-2 py-1 text-[13px] font-mono" />
+          </label>
           <button onClick={checkAnswer} className="text-[12.5px] font-semibold px-4 py-2 rounded-full border border-h-1b2a41 text-on-ink bg-h-1b2a41 hover:bg-h-2a3d5c">
             Check answer
           </button>
@@ -1373,10 +1365,10 @@ function Mode5ScaleDrawing() {
         {checked && (
           <div className={`mt-3 p-3 rounded border text-[12.5px] leading-relaxed ${checked.magOk && checked.angleOk ? 'bg-h-e6f2ee border-h-bfe0d5 text-h-1b5c4d' : 'bg-h-f6efdc border-h-e6d9b8 text-h-8f6428'}`}>
             <div>
-              Magnitude: {checked.magOk ? '✓ within 2%' : '✗ off — check your ruler reading and scale conversion'} (you said <AnswerDisplay answer={magAnswer} /> {scenario.unit})
+              Magnitude: {checked.magOk ? '✓ within 2%' : '✗ off — check your ruler reading and scale conversion'} (you said {magAnswer} {scenario.unit})
             </div>
             <div>
-              Angle: {checked.angleOk ? '✓ within 2°' : '✗ off — check the protractor baseline against the reference line'} (you said <AnswerDisplay answer={angleAnswer} />°)
+              Angle: {checked.angleOk ? '✓ within 2°' : '✗ off — check the protractor baseline against the reference line'} (you said {angleAnswer}°)
             </div>
             <div className="mt-2 pt-2 border-t border-current/20 font-mono">
               Calculated answer: Rx = {fmtMag(trueR.x)}, Ry = {fmtMag(trueR.y)} → |R| = {fmtMag(trueRPolar.r)} {scenario.unit}, θ = {fmtAngle(trueRPolar.theta)}°
@@ -1641,8 +1633,8 @@ function Mode6Challenges() {
   };
 
   const checkAnswer = () => {
-    const mag = readAnswer(magAnswer);
-    const ang = readAnswer(angleAnswer);
+    const mag = parseFloat(magAnswer);
+    const ang = parseFloat(angleAnswer);
     if (isNaN(mag) || isNaN(ang)) return;
     const magOk = Math.abs(mag - challenge.answer.mag) / Math.max(0.01, challenge.answer.mag) <= 0.02;
     const angleOk = Math.abs(angleDiff(ang, challenge.answer.theta)) <= 2;
@@ -1699,14 +1691,14 @@ function Mode6Challenges() {
         </div>
 
         <div className="px-4 pb-4 flex flex-wrap items-end gap-3 border-t border-h-eee6d3 pt-3">
-          <div className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1">
             <span className="text-[11px] font-mono text-h-4a5a72">|{challenge.targetLabel}| ({challenge.unit})</span>
-            <MathAnswerInput compact className="w-40" value={magAnswer} onChange={setMagAnswer} onSubmit={checkAnswer} placeholder="magnitude" aria-label={`Magnitude of ${challenge.targetLabel} in ${challenge.unit}`} />
-          </div>
-          <div className="flex flex-col gap-1">
+            <input type="number" value={magAnswer} onChange={(e) => setMagAnswer(e.target.value)} className="w-32 border border-gray-300 rounded px-2 py-1 text-[13px] font-mono" />
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="text-[11px] font-mono text-h-4a5a72">θ (° from +x)</span>
-            <MathAnswerInput compact className="w-36" value={angleAnswer} onChange={setAngleAnswer} onSubmit={checkAnswer} placeholder="θ" aria-label="Angle in degrees from the positive x axis" />
-          </div>
+            <input type="number" value={angleAnswer} onChange={(e) => setAngleAnswer(e.target.value)} className="w-28 border border-gray-300 rounded px-2 py-1 text-[13px] font-mono" />
+          </label>
           <button onClick={checkAnswer} className="text-[12.5px] font-semibold px-4 py-2 rounded-full border border-h-1b2a41 text-on-ink bg-h-1b2a41 hover:bg-h-2a3d5c">
             Check
           </button>

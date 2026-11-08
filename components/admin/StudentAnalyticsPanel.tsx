@@ -15,7 +15,6 @@ import {
   rankByAccuracy,
 } from '@/lib/admin/studentHistory';
 import { LocalTime } from '@/components/admin/LocalTime';
-import { AnswerDisplay } from '@/components/math/MathDisplay';
 
 const RIGHT = 'var(--viz-1)';
 const WRONG = 'var(--viz-2)';
@@ -378,7 +377,7 @@ export function StudentAnalyticsPanel({
                   </span>
                 </div>
                 <p className="text-sm text-gray-700 mt-1 break-words line-clamp-2">{m.question}</p>
-                {m.last_answer && <p className="text-xs text-gray-500 mt-0.5 break-words">Last answer: <AnswerDisplay answer={m.last_answer} /></p>}
+                {m.last_answer && <p className="text-xs text-gray-500 mt-0.5 break-words">Last answer: {m.last_answer}</p>}
               </li>
             ))}
           </ul>

@@ -6,9 +6,7 @@ import Link from 'next/link';
 import { SimulationIcon } from '@/components/icons/SimulationIcon';
 import { MomentumDiagram } from '@/components/practice/MomentumDiagrams';
 import { trackEvent } from '@/lib/analytics/client';
-import { previewAnswer } from '@/lib/grading/numericAnswer';
-import MathAnswerInput from '@/components/math/MathAnswerInput';
-import { AnswerDisplay, QuantityDisplay } from '@/components/math/MathDisplay';
+import { previewAnswer, FORMAT_HINT } from '@/lib/grading/numericAnswer';
 import { nextQuestionIndex, summarize, type QuestionStatus } from '@/lib/practice/progress';
 import { QuestionMap } from '@/components/practice/QuestionMap';
 import { SolutionViewer } from '@/components/solutions/SolutionViewer';
@@ -151,8 +149,6 @@ export function PracticeSession({
   const [solutionOpenFor, setSolutionOpenFor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>('');
   const [checking, setChecking] = useState(false);
-  // Why the server refused to grade an answer (too long, unreadable symbols).
-  const [submitError, setSubmitError] = useState('');
   const [result, setResult] = useState<{
     isCorrect: boolean;
     correctAnswerLabel: string;
@@ -267,7 +263,6 @@ export function PracticeSession({
     // Still inside the click/Enter: unlock audio now, the result arrives after an await.
     primeFeedback();
     setChecking(true);
-    setSubmitError('');
     try {
       const res = await fetch(`/api/practice/${topicId}/submit`, {
         method: 'POST',
@@ -280,7 +275,6 @@ export function PracticeSession({
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 400 && data?.error) setSubmitError(data.error);
         setChecking(false);
         return;
       }
@@ -316,7 +310,7 @@ export function PracticeSession({
     if (result.isCorrect) {
       (milestone.current ? celebrateMilestone : celebrateCorrect)(feedbackBox.current);
     } else {
-      shakeIncorrect(answerArea.current?.querySelector('[data-selected], .math-answer, input'));
+      shakeIncorrect(answerArea.current?.querySelector('[data-selected], input'));
     }
     milestone.current = false;
   }, [result]);
@@ -330,7 +324,6 @@ export function PracticeSession({
 
   const goTo = (i: number) => {
     setSelected('');
-    setSubmitError('');
     setResult(null);
     setSolutionOpenFor(null);
     setMenu(null);
@@ -664,37 +657,49 @@ export function PracticeSession({
               </div>
             )}
 
-            {(current.answerType === 'numeric' || current.answerType === 'free_text') && (
+            {current.answerType === 'numeric' && (
               <div>
-                {/* The maths answer box (MathLive): powers, fractions, roots and
-                    standard form typed the way they are written on paper. It
-                    holds LaTeX, which is sent as-is; the grader reads it (and
-                    plain text such as 1.8e10 or 1.8 x 10^10) on submit only.
-                    The preview below just mirrors what the grader will read. */}
-                <MathAnswerInput
-                  key={current.id}
+                {/* type="text", not "number": a number input silently discards
+                    anything it considers invalid, so "1.8 x 10^10" reached the
+                    server as an empty string. Nothing here validates as you
+                    type — the preview below just mirrors what the grader will
+                    read, and grading happens only on submit. */}
+                <input
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={selected}
-                  onChange={(v) => {
-                    setSelected(v);
-                    if (submitError) setSubmitError('');
-                  }}
-                  onSubmit={() => !result && !checking && void handleCheck()}
                   disabled={!!result}
-                  invalid={answeredWrong}
+                  onChange={(e) => setSelected(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !result && void handleCheck()}
                   placeholder="Your answer"
-                  aria-label={`Your answer to question ${current.number}`}
+                  className={`w-full rounded-lg border px-4 py-2.5 text-[15px] transition-colors duration-200 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 ${
+                    answeredWrong ? 'border-red-400' : 'border-gray-300'
+                  }`}
                 />
+                <p className="mt-2 text-xs text-gray-500">{FORMAT_HINT}</p>
                 {answerPreview && (
-                  <p className="mt-1.5 text-xs text-blue-700">
-                    Reading this as <QuantityDisplay text={answerPreview} className="font-semibold" />
-                  </p>
-                )}
-                {submitError && (
-                  <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">
-                    {submitError}
+                  <p className="mt-1 text-xs text-blue-700">
+                    Reading this as <span className="font-semibold">{answerPreview}</span>
                   </p>
                 )}
               </div>
+            )}
+
+            {current.answerType === 'free_text' && (
+              <input
+                type="text"
+                value={selected}
+                disabled={!!result}
+                onChange={(e) => setSelected(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !result && void handleCheck()}
+                placeholder="Your answer"
+                className={`w-full rounded-lg border px-4 py-2.5 text-[15px] transition-colors duration-200 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 ${
+                  answeredWrong ? 'border-red-400' : 'border-gray-300'
+                }`}
+              />
             )}
             </div>
 
@@ -706,20 +711,8 @@ export function PracticeSession({
                 className={`fb-fade-in mt-4 rounded-xl border p-4 ${result.isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}
               >
                 <p className={`mb-1.5 font-semibold ${result.isCorrect ? 'fb-pop-in text-green-800' : 'text-red-800'}`}>
-                  {result.isCorrect ? (
-                    '✓ Correct!'
-                  ) : (
-                    <>
-                      ✕ Not quite — the answer was{' '}
-                      {current.answerType === 'multiple_choice' ? result.correctAnswerLabel : <QuantityDisplay text={result.correctAnswerLabel} />}
-                    </>
-                  )}
+                  {result.isCorrect ? '✓ Correct!' : `✕ Not quite — the answer was ${result.correctAnswerLabel}`}
                 </p>
-                {current.answerType !== 'multiple_choice' && selected && (
-                  <p className={`mb-1.5 text-sm ${result.isCorrect ? 'text-green-900' : 'text-red-900'}`}>
-                    You wrote <AnswerDisplay answer={selected} className="font-semibold" />
-                  </p>
-                )}
                 {result.feedback && !result.isCorrect && (
                   <p className="mb-2 text-sm leading-relaxed text-red-900">{result.feedback}</p>
                 )}
